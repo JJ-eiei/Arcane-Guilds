@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1d2b2a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Board Game">
+  <title>Board Game Online</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="conn" class="conn" hidden>กำลังเชื่อมต่อใหม่…</div>
+
+  <!-- HOME -->
+  <main id="screen-home" class="screen home">
+    <div class="home-card">
+      <div class="logo" aria-hidden="true">
+        <span class="die"></span><span class="die d2"></span>
+      </div>
+      <h1>Board Game <em>Online</em></h1>
+      <p class="sub">เล่นกับเพื่อนได้ทั้งบนไอแพดและคอมพิวเตอร์</p>
+
+      <label class="field">
+        <span>ชื่อของคุณ</span>
+        <input id="name" maxlength="20" autocomplete="nickname" placeholder="เช่น JJ" enterkeyhint="done">
+      </label>
+
+      <button id="btn-create" class="btn primary big">สร้างห้องใหม่</button>
+
+      <div class="or"><span>หรือ เข้าห้องเพื่อน</span></div>
+
+      <form id="join-form" class="join">
+        <input id="code" class="code-input" maxlength="4" autocapitalize="characters" autocomplete="off"
+               spellcheck="false" placeholder="ABCD" aria-label="รหัสห้อง" inputmode="text" enterkeyhint="go">
+        <button class="btn big" type="submit">เข้าห้อง</button>
+      </form>
+    </div>
+  </main>
+
+  <!-- LOBBY -->
+  <main id="screen-lobby" class="screen lobby" hidden>
+    <div class="lobby-card">
+      <header class="lobby-head">
+        <div>
+          <div class="label">รหัสห้อง</div>
+          <div id="lobby-code" class="room-code">----</div>
+        </div>
+        <button id="btn-share" class="btn">แชร์ลิงก์</button>
+      </header>
+
+      <section>
+        <div class="row-between">
+          <h2>ผู้เล่น <span id="player-count" class="muted"></span></h2>
+        </div>
+        <ul id="lobby-players" class="player-list"></ul>
+      </section>
+
+      <section id="game-pick-wrap">
+        <h2>เกม</h2>
+        <select id="game-pick" class="select"></select>
+        <p id="game-info" class="muted small"></p>
+      </section>
+
+      <footer class="lobby-actions">
+        <button id="btn-leave" class="btn ghost">ออกจากห้อง</button>
+        <button id="btn-start" class="btn primary big">เริ่มเกม</button>
+      </footer>
+      <p id="lobby-hint" class="muted small center"></p>
+    </div>
+  </main>
+
+  <!-- GAME -->
+  <main id="screen-game" class="screen game" hidden>
+    <header class="game-bar">
+      <button id="btn-menu" class="icon-btn" aria-label="เมนู">☰</button>
+      <div id="game-players" class="chips"></div>
+      <button id="btn-chat" class="icon-btn" aria-label="แชท">💬<span id="chat-badge" class="badge" hidden></span></button>
+    </header>
+    <div id="turn-banner" class="turn-banner"></div>
+    <div class="game-body">
+      <div id="board" class="board-wrap"></div>
+      <aside id="chat" class="chat">
+        <div class="chat-head">
+          <strong>แชท</strong>
+          <button id="btn-chat-close" class="icon-btn small" aria-label="ปิดแชท">✕</button>
+        </div>
+        <ol id="chat-log" class="chat-log"></ol>
+        <form id="chat-form" class="chat-form">
+          <input id="chat-input" maxlength="200" placeholder="พิมพ์ข้อความ…" autocomplete="off" enterkeyhint="send">
+          <button class="btn">ส่ง</button>
+        </form>
+      </aside>
+    </div>
+
+    <div id="over" class="overlay" hidden>
+      <div class="over-card">
+        <h2 id="over-title"></h2>
+        <p id="over-sub" class="muted"></p>
+        <div class="over-actions">
+          <button id="btn-rematch" class="btn primary big">เล่นอีกตา</button>
+          <button id="btn-to-lobby" class="btn">กลับล็อบบี้</button>
+          <button id="btn-over-close" class="btn ghost">ดูกระดาน</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="menu" class="overlay" hidden>
+      <div class="over-card">
+        <h2>เมนู</h2>
+        <p class="muted">ห้อง <strong id="menu-code"></strong></p>
+        <div class="over-actions">
+          <button id="btn-menu-share" class="btn">แชร์ลิงก์ห้อง</button>
+          <button id="btn-menu-lobby" class="btn">กลับล็อบบี้ (หัวห้อง)</button>
+          <button id="btn-menu-leave" class="btn danger">ออกจากห้อง</button>
+          <button id="btn-menu-close" class="btn ghost">ปิด</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/games/connect4.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
