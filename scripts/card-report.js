@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
-const { ELEMENTS, ELEMENT_INFO, TEMPLATES, CARDS, GUARDIANS, DRAGONS, PROPHECIES, CONFIG } = require('../server/games/arcane/data');
+const { ELEMENTS, ELEMENT_INFO, TEMPLATES, EVENTS, CARDS, GUARDIANS, DRAGONS, PROPHECIES, CONFIG } = require('../server/games/arcane/data');
 
 const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
 const icon = (e) => ELEMENT_INFO[e].icon;
@@ -90,6 +90,9 @@ for (const d of DRAGONS) md += `| ${d.id} | ${d.name} | ${costStr(d.req)} |\n`;
 
 md += `\n## คำทำนาย (จั่ว 2 เก็บ 1 · ลับ)\n| รหัส | ชื่อ | เงื่อนไข | เกียรติยศ |\n|---|---|---|---|\n`;
 for (const p of PROPHECIES) md += `| ${p.id} | ${p.name} | ${p.text} | +${p.points} |\n`;
+
+md += `\n## ลางบอกเหตุ (event · สุ่มลำดับ ไม่ซ้ำในเกมเดียว)\n| รหัส | ชื่อ | ผล | ระยะเวลา |\n|---|---|---|---|\n`;
+for (const e of EVENTS) md += `| ${e.id} | ${e.icon} ${e.name} | ${e.text} | ${e.kind === 'round' ? '1 รอบ' : 'ทันที'} |\n`;
 
 md += `\n## ค่าตั้งต้น ⚙️\n\`\`\`json\n${JSON.stringify(CONFIG, null, 2)}\n\`\`\`\n`;
 

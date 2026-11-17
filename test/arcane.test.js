@@ -12,7 +12,7 @@ const P = (n) => Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i
 // Turn-order compensation is switched off here so token counts are exact;
 // it has its own test.
 function game(n = 2, seed = 1, config) {
-  const s = G.setup(P(n), { seed, skipProphecyPick: true, config: { startTokens: Array(n).fill(0), ...config } });
+  const s = G.setup(P(n), { seed, skipProphecyPick: true, config: { startTokens: Array(n).fill(0), omens: { perLevel: {} }, ...config } });
   s.firstSeat = 0; s.turn = 0;
   return s;
 }
@@ -30,7 +30,6 @@ const putInMarket = (s, id) => {
 const totalTokens = (s) => {
   const t = Object.fromEntries(G.TOKEN_TYPES.map((k) => [k, s.supply[k]]));
   for (const p of s.players) for (const k of G.TOKEN_TYPES) t[k] += p.tokens[k];
-  for (const seal of Object.values(s.seals)) t[seal.color] += 1;
   return t;
 };
 
@@ -184,97 +183,6 @@ test('§4.2 guardian: auto when one qualifies, choice when several, one per turn
   assert.equal(t.guardians.length, 3);
 });
 
-// ---------------------------------------------------------------- §5 seals
-test('§5 seal: place, limit 2, no star, card stays buyable', () => {
-  const s = game(4);
-  give(s, 0, { fire: 3, star: 1 });
-  const [a, b, c] = s.market[1];
-  bad(s, 0, { type: 'seal', cardId: a, color: 'star' }, /ดวงดาว/);
-  bad(s, 0, { type: 'seal', cardId: a, color: 'water' }, /ไม่มีผลึก/);
-  ok(s, 0, { type: 'seal', cardId: a, color: 'fire' });
-  assert.equal(s.players[0].tokens.fire, 2);
-  assert.deepEqual(s.seals[a], { seat: 0, color: 'fire' });
-  assert.ok(s.market[1].includes(a));
-  bad(s, 1, { type: 'seal', cardId: a, color: 'fire' }, /มีผนึกอยู่แล้ว/);
-  ok(s, 1, { type: 'take', colors: ['fire', 'water', 'earth'] });
-  ok(s, 2, { type: 'take', colors: ['fire', 'water', 'earth'] });
-  ok(s, 3, { type: 'take', colors: ['fire', 'water', 'earth'] });
-  ok(s, 0, { type: 'seal', cardId: b, color: 'fire' });
-  for (const seat of [1, 2, 3]) ok(s, seat, { type: 'take', colors: ['wind', 'light', 'water'] });
-  bad(s, 0, { type: 'seal', cardId: c, color: 'fire' }, /สูงสุด 2/);
-  bad(s, 0, { type: 'seal', cardId: 'zz', color: 'fire' }, /ตลาด/);
-});
-
-test('§5 sealed tokens do not count toward the 10 limit; conservation holds', () => {
-  const s = game(4);
-  give(s, 0, { fire: 5, water: 5 });
-  const before = totalTokens(s);
-  ok(s, 0, { type: 'seal', cardId: s.market[1][0], color: 'fire' });
-  assert.equal(s.phase, 'action');
-  assert.equal(G.sumTokens(s.players[0].tokens), 9);
-  assert.deepEqual(totalTokens(s), before);
-});
-
-test('§5 curse: another player buying a sealed card pays 1 extra to the sealer; seal crystal returns', () => {
-  const s = game(4);
-  putInMarket(s, 'fi14'); // ✨3
-  give(s, 0, { water: 1 });
-  ok(s, 0, { type: 'seal', cardId: 'fi14', color: 'water' });
-  give(s, 1, { light: 3 });
-  bad(s, 1, { type: 'buy', cardId: 'fi14' }, /ค่าสาป/); // no token left for the curse
-  give(s, 1, { earth: 1 });
-  const before = totalTokens(s);
-  ok(s, 1, { type: 'buy', cardId: 'fi14' });
-  assert.equal(s.players[1].tokens.earth, 0);
-  assert.equal(s.players[0].tokens.earth, 1, 'curse paid to sealer');
-  assert.equal(s.players[0].tokens.water, 1, 'seal crystal back home');
-  assert.equal(s.players[0].cursesCollected, 1);
-  assert.equal(s.players[0].sealsActive, 0);
-  assert.equal(s.seals.fi14, undefined);
-  assert.deepEqual(totalTokens(s), before);
-});
-
-test('§5 curse color can be chosen; reserving a sealed card is also cursed (star may pay)', () => {
-  const s = game(4);
-  putInMarket(s, 'fi14');
-  give(s, 0, { water: 1 });
-  ok(s, 0, { type: 'seal', cardId: 'fi14', color: 'water' });
-  give(s, 1, { light: 3, fire: 2, wind: 1 });
-  bad(s, 1, { type: 'buy', cardId: 'fi14', curseColor: 'earth' }, /ไม่พอ/);
-  ok(s, 1, { type: 'buy', cardId: 'fi14', curseColor: 'wind' });
-  assert.equal(s.players[0].tokens.wind, 1);
-
-  const t = game(4);
-  const id = t.market[2][0];
-  give(t, 0, { fire: 1 });
-  ok(t, 0, { type: 'seal', cardId: id, color: 'fire' });
-  ok(t, 1, { type: 'reserve', cardId: id }); // has nothing but the star it just got
-  assert.equal(t.players[1].tokens.star, 0);
-  assert.equal(t.players[0].tokens.star, 1);
-  assert.equal(t.players[0].tokens.fire, 1);
-});
-
-test('§5 owner buying own sealed card: seal crystal works as a wild; returns if not needed', () => {
-  const s = game(4);
-  putInMarket(s, 'fi14'); // ✨3
-  give(s, 0, { water: 1 });
-  ok(s, 0, { type: 'seal', cardId: 'fi14', color: 'water' });
-  for (const seat of [1, 2, 3]) ok(s, seat, { type: 'take', colors: ['fire', 'earth', 'wind'] });
-  give(s, 0, { light: 2 });
-  ok(s, 0, { type: 'buy', cardId: 'fi14' }); // 2 light + seal-wild
-  assert.equal(G.sumTokens(s.players[0].tokens), 0);
-  assert.equal(s.players[0].sealsActive, 0);
-
-  const t = game(4);
-  putInMarket(t, 'fi14');
-  give(t, 0, { water: 1, light: 3 });
-  ok(t, 0, { type: 'seal', cardId: 'fi14', color: 'water' });
-  for (const seat of [1, 2, 3]) ok(t, seat, { type: 'take', colors: ['fire', 'earth', 'wind'] });
-  ok(t, 0, { type: 'buy', cardId: 'fi14' });
-  assert.equal(t.players[0].tokens.water, 1, 'not needed → back to hand');
-});
-
-// ---------------------------------------------------------------- §6 dragon
 test('§6 dragon (stealOnTie off): first to qualify claims; strictly stronger steals; ties do not', () => {
   const s = game(3, 1, { dragonStealOnTie: false });
   const dr = G.DRAGON[s.dragon.id];
@@ -380,9 +288,9 @@ test('§7 every prophecy kind evaluates', () => {
   assert.equal(check('p-dragon'), false);
   s.dragon.owner = 0;
   assert.equal(check('p-dragon'), true);
-  assert.equal(check('p-sealer'), false);
-  p.cursesCollected = 3;
-  assert.equal(check('p-sealer'), true);
+  assert.equal(check('p-summoner'), false);
+  giveCards(s, 0, D.CARDS.filter((c) => c.level === 2).slice(0, 4).map((c) => c.id));
+  assert.equal(check('p-summoner'), true);
 });
 
 // ---------------------------------------------------------------- §9 hidden info
@@ -448,20 +356,18 @@ test('fuzz: 300 random games (2–4p) — invariants hold and games end', () => 
       // invariants
       assert.deepEqual(totalTokens(s), initial, 'token conservation');
       for (const [i, p] of s.players.entries()) {
-        // limit is enforced at the end of your own turn; curses received on
-        // other players' turns (plus seal crystals coming home) can push you over
-        const cap = s.config.tokenLimit + s.config.seal.maxPerPlayer * (s.config.seal.curse + 1) + (s.phase === 'discard' && s.turn === i ? 3 : 0);
+        // limit is enforced at the end of your own turn; a meteor shower on
+        // someone else's turn can push you over by one
+        const cap = s.config.tokenLimit + 1 + (s.phase === 'discard' && s.turn === i ? 4 : 0);
         assert.ok(G.sumTokens(p.tokens) <= cap, '10 limit');
         assert.ok(p.reserved.length <= s.config.reserveLimit);
-        assert.ok(p.sealsActive <= s.config.seal.maxPerPlayer && p.sealsActive >= 0);
         for (const t of G.TOKEN_TYPES) assert.ok(p.tokens[t] >= 0, 'no negative tokens');
       }
       for (const t of G.TOKEN_TYPES) assert.ok(s.supply[t] >= 0, 'no negative supply');
-      const all = [...[1, 2, 3].flatMap((lv) => [...s.market[lv], ...s.decks[lv]].filter(Boolean)),
+      const all = [...[1, 2, 3].flatMap((lv) => [...s.market[lv], ...s.decks[lv]].filter((x) => x && !G.isOmen(x))),
         ...s.players.flatMap((p) => [...p.cards, ...p.reserved.map((x) => x.id)])];
       assert.equal(all.length, 90, 'every card accounted for');
       assert.equal(new Set(all).size, 90, 'no duplicated card');
-      for (const id of Object.keys(s.seals)) assert.ok([1, 2, 3].some((lv) => s.market[lv].includes(id)), 'seals only on market cards');
     }
     if (s.phase === 'over') ended++;
     assert.ok(s.result && s.result.winners.length >= 1);
@@ -477,19 +383,6 @@ test('config: startTokens compensates later seats with distinct crystals', () =>
   assert.ok(Object.values(byPos[3]).every((v) => v <= 1), 'distinct elements');
   assert.equal(byPos[3].star, 0);
   assert.deepEqual(totalTokens(s), totalTokens(G.setup(P(4), { seed: 5, skipProphecyPick: true })));
-});
-
-test('config: seal.takeWith lets a seal also take distinct crystals', () => {
-  const s = game(4, 1, { seal: { maxPerPlayer: 2, curse: 1, ownerWild: true, takeWith: 2 } });
-  give(s, 0, { fire: 1 });
-  const id = s.market[1][0];
-  bad(s, 0, { type: 'seal', cardId: id, color: 'fire', colors: ['water', 'water'] }, /ต่างกัน/);
-  bad(s, 0, { type: 'seal', cardId: id, color: 'fire', colors: ['water', 'earth', 'wind'] }, /ไม่เกิน 2/);
-  ok(s, 0, { type: 'seal', cardId: id, color: 'fire', colors: ['water', 'earth'] });
-  assert.equal(s.players[0].tokens.water + s.players[0].tokens.earth, 2);
-  const t = game(4, 1, { seal: { maxPerPlayer: 2, curse: 1, ownerWild: true, takeWith: 0 } });
-  give(t, 0, { fire: 1 });
-  bad(t, 0, { type: 'seal', cardId: t.market[1][0], color: 'fire', colors: ['water'] }, /ไม่ได้ผลึกเพิ่ม/);
 });
 
 test('config: dragonReq and prophecy overrides', () => {
@@ -522,4 +415,159 @@ test('defaults: turn-order compensation 2p none, 3p 0-1-1, 4p 0-1-1-1', () => {
     const s = G.setup(P(n), { seed: 11 });
     assert.deepEqual([...Array(n).keys()].map((k) => G.sumTokens(s.players[(s.firstSeat + k) % n].tokens)), exp);
   }
+});
+
+// ---------------------------------------------------------------- §5 omen events
+// A started game with omens on, seat 0 to move, no turn-order compensation.
+function evGame(n = 2, seed = 3, config) {
+  const s = G.setup(P(n), { seed, skipProphecyPick: true, config: { startTokens: Array(n).fill(0), ...config } });
+  s.firstSeat = 0; s.turn = 0;
+  return s;
+}
+const toRound = (s, r) => { s.turnCount = (r - 1) * s.n + 1; };
+const omenOnTop = (s, lv) => { s.decks[lv] = s.decks[lv].filter((x) => !G.isOmen(x)); s.decks[lv].push('omen:t'); };
+const forceEvent = (s, id) => { s.eventDeck = [id]; };
+
+test('§5 omens: 3/2/1 shuffled into decks, never in the opening market', () => {
+  for (let seed = 1; seed < 30; seed++) {
+    const s = G.setup(P(3), { seed });
+    for (const [lv, k] of [[1, 3], [2, 2], [3, 1]]) {
+      assert.equal(s.decks[lv].filter(G.isOmen).length, k);
+      assert.equal(s.market[lv].filter(G.isOmen).length, 0);
+    }
+    assert.equal(s.eventDeck.length, 8);
+  }
+});
+
+test('§5 an omen revealed while refilling triggers the next event; the slot still gets a real card', () => {
+  const s = evGame();
+  toRound(s, 5);
+  omenOnTop(s, 1);
+  forceEvent(s, 'meteor');
+  give(s, 0, G.CARD[s.market[1][0]].cost);
+  ok(s, 0, { type: 'buy', cardId: s.market[1][0] });
+  assert.equal(s.stats.events, 1);
+  assert.ok(s.market[1][0] && !G.isOmen(s.market[1][0]));
+  assert.ok(s.log.some((e) => e.type === 'event' && e.event === 'meteor'));
+});
+
+test('§5 omens fizzle before round 4, within 3 rounds of the last event, and in the final round', () => {
+  const s = evGame();
+  toRound(s, 2); omenOnTop(s, 1); forceEvent(s, 'meteor');
+  ok(s, 0, { type: 'reserve', cardId: s.market[1][0] });
+  assert.equal(s.stats.events, 0); assert.equal(s.stats.omenFizzles, 1);
+
+  const t = evGame();
+  toRound(t, 5); t.lastEventRound = 3; omenOnTop(t, 1); forceEvent(t, 'meteor');
+  ok(t, 0, { type: 'reserve', cardId: t.market[1][0] });
+  assert.equal(t.stats.events, 0, 'gap < 3 rounds');
+  t.lastEventRound = 2; omenOnTop(t, 1); forceEvent(t, 'meteor');
+  ok(t, 1, { type: 'reserve', cardId: t.market[1][1] });
+  assert.equal(t.stats.events, 1, 'gap of 3 rounds is fine');
+
+  const u = evGame();
+  toRound(u, 9); u.finalRound = true; omenOnTop(u, 1); forceEvent(u, 'meteor');
+  ok(u, 0, { type: 'reserve', cardId: u.market[1][0] });
+  assert.equal(u.stats.events, 0);
+});
+
+test('§5 blind reserve reveals omens on top of the deck too', () => {
+  const s = evGame();
+  toRound(s, 6); omenOnTop(s, 2); forceEvent(s, 'storm');
+  ok(s, 0, { type: 'reserve', deck: 2 });
+  assert.equal(s.event.id, 'storm');
+  assert.ok(G.CARD[s.players[0].reserved[0].id]);
+});
+
+test('§5 one-round events last until the revealer\'s next turn ends', () => {
+  const s = evGame(3);
+  G.triggerEvent(s, 'storm', 0);
+  s.event.remaining = s.n + 1; // as if revealed during seat 0's turn
+  ok(s, 0, { type: 'take', colors: ['fire', 'water', 'earth'] });
+  assert.ok(s.event, 'active for seat 1');
+  ok(s, 1, { type: 'take', colors: ['fire', 'water', 'earth', 'wind'] });
+  ok(s, 2, { type: 'take', colors: ['fire', 'water', 'earth', 'wind'] });
+  assert.ok(s.event, 'still active for seat 0');
+  ok(s, 0, { type: 'take', colors: ['fire', 'water', 'earth', 'wind'] });
+  assert.equal(s.event, null, 'over after the revealer\'s next turn');
+  bad(s, 1, { type: 'take', colors: ['fire', 'water', 'earth', 'wind'] }, /1–3/);
+});
+
+test('§5 wrath: >6 crystals lose 2 of their most plentiful colour; dragon owner is safe', () => {
+  const s = evGame(3);
+  give(s, 0, { fire: 4, water: 3 });
+  give(s, 1, { earth: 5, wind: 3 });
+  give(s, 2, { light: 6 });
+  s.dragon.owner = 1;
+  G.triggerEvent(s, 'wrath', 0);
+  assert.deepEqual([s.players[0].tokens.fire, s.players[0].tokens.water], [2, 3]);
+  assert.equal(G.sumTokens(s.players[1].tokens), 8, 'dragon owner untouched');
+  assert.equal(s.players[2].tokens.light, 6, '6 is not more than 6');
+});
+
+test('§5 black market: one 2→1 exchange per player, free action, only while active', () => {
+  const s = evGame();
+  give(s, 0, { fire: 2, star: 1 });
+  bad(s, 0, { type: 'exchange', give: { fire: 2 }, get: 'water' }, /ไม่ได้เปิด/);
+  G.triggerEvent(s, 'black', 1); s.event.remaining = 3;
+  bad(s, 0, { type: 'exchange', give: { fire: 1 }, get: 'water' }, /2 เม็ด/);
+  bad(s, 0, { type: 'exchange', give: { fire: 3 }, get: 'water' });
+  ok(s, 0, { type: 'exchange', give: { fire: 1, star: 1 }, get: 'water' });
+  assert.equal(s.turn, 0, 'turn continues');
+  assert.deepEqual([s.players[0].tokens.fire, s.players[0].tokens.star, s.players[0].tokens.water], [1, 0, 1]);
+  bad(s, 0, { type: 'exchange', give: { fire: 1, water: 1 }, get: 'earth' }, /ไปแล้ว/);
+  ok(s, 0, { type: 'take', colors: ['earth', 'wind', 'light'] });
+});
+
+test('§5 eclipse: the four Lv3 cards go under the deck and four new ones come out', () => {
+  const s = evGame();
+  const before = [...s.market[3]];
+  G.triggerEvent(s, 'eclipse', 0);
+  assert.equal(s.market[3].filter(Boolean).length, 4);
+  for (const id of before) assert.ok(!s.market[3].includes(id) && s.decks[3].slice(0, 4).includes(id));
+});
+
+test('§5 storm allows 4 different; drought bans one element', () => {
+  const s = evGame(2);
+  bad(s, 0, { type: 'take', colors: ['fire', 'water', 'earth', 'wind'] });
+  G.triggerEvent(s, 'storm', 0); s.event.remaining = 3;
+  ok(s, 0, { type: 'take', colors: ['fire', 'water', 'earth', 'wind'] });
+  ok(s, 1, { type: 'take', colors: ['fire', 'water', 'earth'] }); // 3 still fine
+  const t = evGame(2);
+  G.triggerEvent(t, 'drought', 0); t.event.remaining = 3;
+  const banned = t.event.element;
+  const others = ELEMENTS.filter((e) => e !== banned);
+  bad(t, 0, { type: 'take', colors: [banned, others[0], others[1]] }, /ขาดแคลน/);
+  ok(t, 0, { type: 'take', colors: others.slice(0, 3) });
+  assert.ok(G.legalMoves(t, 1).every((m) => m.type !== 'take' || !m.colors.includes(banned)));
+});
+
+test('§5 meteor gives stars from the revealer onwards while they last; festival discounts Lv1', () => {
+  const s = evGame(3);
+  s.supply.star = 2;
+  G.triggerEvent(s, 'meteor', 1);
+  assert.deepEqual(s.players.map((p) => p.tokens.star), [0, 1, 1]);
+  const t = evGame(2);
+  putInMarket(t, 'fi14'); // ✨3
+  give(t, 0, { light: 2 });
+  bad(t, 0, { type: 'buy', cardId: 'fi14' }, /ไม่พอ/);
+  G.triggerEvent(t, 'festival', 1); t.event.remaining = 3;
+  ok(t, 0, { type: 'buy', cardId: 'fi14' });
+  assert.equal(t.players[0].tokens.light, 0);
+});
+
+test('§5 wanderer adds a guardian that is not already in play', () => {
+  const s = evGame(2);
+  const before = [...s.guardians];
+  G.triggerEvent(s, 'wanderer', 0);
+  assert.equal(s.guardians.length, before.length + 1);
+  assert.ok(!before.includes(s.guardians[s.guardians.length - 1]));
+});
+
+test('§5 view shows the active event to everyone', () => {
+  const s = evGame(2);
+  G.triggerEvent(s, 'drought', 0); s.event.remaining = 3;
+  const v = G.view(s, 1);
+  assert.equal(v.event.id, 'drought');
+  assert.ok(ELEMENTS.includes(v.event.element));
 });

@@ -2,7 +2,7 @@
 // Implements the game-module interface used by server/rooms.js:
 //   setup(players, options) · move(state, seat, move) · view(state, seat)
 //   currentTurn(state) · isOver(state)
-// plus helpers used by bots / simulation: legalMoves, scoreOf, CARD.
+// plus helpers used by bots / simulation: legalMoves, scoreOf, CARD …
 //
 // Rules reference: docs/arcane-guilds-design.md
 
@@ -15,7 +15,10 @@ const CARD = Object.fromEntries(D.CARDS.map((c) => [c.id, c]));
 const GUARDIAN = Object.fromEntries(D.GUARDIANS.map((g) => [g.id, g]));
 const DRAGON = Object.fromEntries(D.DRAGONS.map((d) => [d.id, d]));
 const PROPHECY = Object.fromEntries(D.PROPHECIES.map((p) => [p.id, p]));
-const MAX_TURNS = 400; // safety valve for simulations
+const EVENT = Object.fromEntries(D.EVENTS.map((e) => [e.id, e]));
+const OMEN = 'omen';           // deck entries that are omen cards look like 'omen:1:0'
+const isOmen = (id) => typeof id === 'string' && id.startsWith(OMEN);
+const MAX_TURNS = 400;         // safety valve for simulations
 
 // ---------------------------------------------------------------- helpers
 function rng(state) {
@@ -34,15 +37,18 @@ function shuffle(state, arr) {
 }
 const emptyTokens = () => Object.fromEntries(TOKEN_TYPES.map((t) => [t, 0]));
 const sumTokens = (t) => TOKEN_TYPES.reduce((a, k) => a + (t[k] || 0), 0);
+const round = (state) => Math.ceil(state.turnCount / state.n);
 
 function bonuses(state, seat) {
   const b = Object.fromEntries(ELEMENTS.map((e) => [e, 0]));
   for (const id of state.players[seat].cards) b[CARD[id].bonus]++;
   return b;
 }
+const meets = (bonus, req) => Object.entries(req).every(([e, n]) => bonus[e] >= n);
 
-function meets(bonus, req) {
-  return Object.entries(req).every(([e, n]) => bonus[e] >= n);
+function dragonReq(config, id) {
+  const n = config.dragonReq;
+  return Object.fromEntries(Object.keys(DRAGON[id].req).map((e) => [e, n]));
 }
 
 // Public prestige (no prophecy) — used for the 15-point trigger.
@@ -55,27 +61,28 @@ function publicPoints(state, seat) {
   return pts;
 }
 
+function prophecyDef(state, id) {
+  return id ? { ...PROPHECY[id], ...((state.config.prophecy || {})[id] || {}) } : null;
+}
 function prophecyMet(state, seat) {
   const p = state.players[seat];
-  const base = p.prophecy && PROPHECY[p.prophecy];
-  if (!base) return false;
-  const pr = { ...base, ...((state.config.prophecy || {})[base.id] || {}) };
+  const pr = prophecyDef(state, p.prophecy);
+  if (!pr) return false;
   const b = bonuses(state, seat);
   switch (pr.kind) {
     case 'elementBonus': return b[pr.element] >= pr.min;
     case 'allBonus': return ELEMENTS.every((e) => b[e] >= pr.min);
     case 'guardians': return p.guardians.length >= pr.min;
     case 'dragon': return state.dragon.owner === seat;
-    case 'curses': return p.cursesCollected >= pr.min;
+    case 'starsGained': return (p.starsGained || 0) >= pr.min;
     case 'levelCount': return p.cards.filter((id) => CARD[id].level === pr.level).length >= pr.min;
     default: return false;
   }
 }
-
 function scoreOf(state, seat) {
   const pub = publicPoints(state, seat);
-  const pid = state.players[seat].prophecy;
-  const proph = prophecyMet(state, seat) ? (((state.config.prophecy || {})[pid] || {}).points ?? PROPHECY[pid].points) : 0;
+  const pr = prophecyDef(state, state.players[seat].prophecy);
+  const proph = pr && prophecyMet(state, seat) ? pr.points : 0;
   return { public: pub, prophecy: proph, total: pub + proph };
 }
 
@@ -85,8 +92,8 @@ function log(state, entry) {
   if (state.log.length > 60) state.log.shift();
 }
 
-// Locate a card that can be targeted: market or own reserve.
 function findMarket(state, cardId) {
+  if (typeof cardId !== 'string') return null;
   for (const lv of [1, 2, 3]) {
     const i = state.market[lv].indexOf(cardId);
     if (i !== -1) return { level: lv, index: i };
@@ -94,45 +101,104 @@ function findMarket(state, cardId) {
   return null;
 }
 
+const activeEvent = (state, id) => state.event && state.event.id === id ? state.event : null;
+
+// ---------------------------------------------------------------- omen events
+// Draw the next real card for a market slot; omens met on the way may trigger.
 function refill(state, level, index) {
+  // empty the slot first so an event (eclipse) never sees the card that just left
+  state.market[level][index] = null;
   const deck = state.decks[level];
-  state.market[level][index] = deck.length ? deck.pop() : null;
+  while (deck.length) {
+    const top = deck.pop();
+    if (isOmen(top)) {
+      revealOmen(state, level);
+      if (state.market[level][index] !== null) return; // the event refilled it
+      continue;
+    }
+    state.market[level][index] = top;
+    return;
+  }
 }
 
-// Seal resolution when a sealed card leaves the market.
-// Returns { error } or { curse: {from, to, color} | null }.
-function planCurse(state, seat, cardId, tokensAfter, curseColor) {
-  const seal = state.seals[cardId];
-  if (!seal || seal.seat === seat) return { curse: null };
-  const n = state.config.seal.curse;
-  if (n <= 0) return { curse: null };
-  let color = curseColor;
-  if (color != null) {
-    if (!TOKEN_TYPES.includes(color)) return { error: 'สีค่าสาปไม่ถูกต้อง' };
-    if ((tokensAfter[color] || 0) < n) return { error: 'ผลึกสีนั้นไม่พอจ่ายค่าสาป' };
-  } else {
-    // default: the element token you hold the most of, star as last resort
-    const best = ELEMENTS.filter((e) => tokensAfter[e] >= n).sort((a, b) => tokensAfter[b] - tokensAfter[a])[0];
-    color = best || (tokensAfter[STAR] >= n ? STAR : null);
+function revealOmen(state, level) {
+  const cfg = state.config.omens;
+  const r = round(state);
+  const tooEarly = r < cfg.firstRound;
+  const tooSoon = state.lastEventRound != null && r - state.lastEventRound < cfg.minGap;
+  if (tooEarly || tooSoon || state.finalRound || state.resolvingEvent || !state.eventDeck.length) {
+    state.stats.omenFizzles++;
+    log(state, { seat: state.turn, type: 'omenFizzle', level });
+    return;
   }
-  if (!color) return { error: `การ์ดนี้ติดผนึก ต้องมีผลึกเหลือจ่ายค่าสาป ${n} เม็ด` };
-  return { curse: { from: seat, to: seal.seat, color, n } };
+  const id = state.eventDeck.pop();
+  state.lastEventRound = r;
+  state.stats.events++;
+  state.stats.eventsById[id] = (state.stats.eventsById[id] || 0) + 1;
+  state.resolvingEvent = true;
+  triggerEvent(state, id, state.turn);
+  state.resolvingEvent = false;
 }
 
-function applyCurse(state, cardId, curse) {
-  const seal = state.seals[cardId];
-  if (!seal) return;
-  delete state.seals[cardId];
-  if (curse) {
-    state.players[curse.from].tokens[curse.color] -= curse.n;
-    state.players[curse.to].tokens[curse.color] += curse.n;
-    state.players[curse.to].cursesCollected += 1;
-    state.stats.curses++;
-    log(state, { seat: curse.to, type: 'curse', from: curse.from, cardId, color: curse.color });
+function triggerEvent(state, id, bySeat) {
+  const ev = EVENT[id];
+  const entry = { seat: bySeat, type: 'event', event: id };
+  if (ev.kind === 'round') {
+    // active for every other player's next turn and the revealer's next turn
+    state.event = { id, remaining: state.n + 1, by: bySeat, used: {} };
+    if (id === 'drought') {
+      state.event.element = ELEMENTS[Math.floor(rng(state) * ELEMENTS.length)];
+      entry.element = state.event.element;
+    }
+    log(state, entry);
+    return;
   }
-  // the sealing crystal goes home to its owner
-  state.players[seal.seat].tokens[seal.color] += 1;
-  state.players[seal.seat].sealsActive -= 1;
+  log(state, entry);
+  switch (id) {
+    case 'wrath': {
+      for (let s = 0; s < state.n; s++) {
+        if (s === state.dragon.owner) continue;
+        const p = state.players[s];
+        if (sumTokens(p.tokens) <= 6) continue;
+        const lost = {};
+        for (let k = 0; k < 2; k++) {
+          const c = ELEMENTS.filter((e) => p.tokens[e] > 0).sort((a, b) => p.tokens[b] - p.tokens[a])[0] || (p.tokens[STAR] > 0 ? STAR : null);
+          if (!c) break;
+          p.tokens[c]--; state.supply[c]++; lost[c] = (lost[c] || 0) + 1;
+        }
+        log(state, { seat: s, type: 'lose', tokens: lost, cause: 'wrath' });
+      }
+      break;
+    }
+    case 'eclipse': {
+      const gone = state.market[3].filter(Boolean);
+      state.decks[3].unshift(...gone);       // to the bottom of the deck
+      state.market[3] = state.market[3].map(() => null);
+      for (let i = 0; i < 4; i++) refill(state, 3, i);
+      log(state, { seat: null, type: 'eclipse', gone });
+      break;
+    }
+    case 'meteor': {
+      for (let k = 0; k < state.n; k++) {
+        const s = (bySeat + k) % state.n;
+        if (state.supply[STAR] <= 0) break;
+        state.supply[STAR]--; state.players[s].tokens[STAR]++; state.players[s].starsGained = (state.players[s].starsGained || 0) + 1;
+        log(state, { seat: s, type: 'gain', tokens: { [STAR]: 1 }, cause: 'meteor' });
+      }
+      break;
+    }
+    case 'wanderer': {
+      const inPlay = new Set([...state.guardians, ...state.players.flatMap((p) => p.guardians)]);
+      const pool = D.GUARDIANS.map((g) => g.id).filter((g) => !inPlay.has(g));
+      if (pool.length) {
+        const g = pool[Math.floor(rng(state) * pool.length)];
+        state.guardians.push(g);
+        log(state, { seat: null, type: 'guardianAppears', id: g });
+      }
+      break;
+    }
+    default: break;
+  }
 }
 
 // Payment plan for buying `cardId` by `seat`. Pure (no mutation).
@@ -148,16 +214,20 @@ function planPayment(state, seat, cardId) {
     pay[e] = use;
     shortage += need - use;
   }
-  let useSeal = false;
-  const seal = state.seals[cardId];
-  if (seal && seal.seat === seat && state.config.seal.ownerWild && shortage > 0) {
-    // the seal crystal covers up to `ownerWildCount` missing crystals (default 1)
-    useSeal = true;
-    shortage -= Math.min(shortage, state.config.seal.ownerWildCount || 1);
+  let discount = 0;
+  if (activeEvent(state, 'festival') && card.level === 1) {
+    // one free crystal of any colour: cover a shortage first, else refund the
+    // most plentiful colour you were about to pay
+    if (shortage > 0) shortage -= 1;
+    else {
+      const e = ELEMENTS.filter((x) => pay[x] > 0).sort((x, y) => pay[y] - pay[x])[0];
+      if (e) pay[e] -= 1;
+    }
+    discount = 1;
   }
   if (shortage > p.tokens[STAR]) return null;
   pay[STAR] = shortage;
-  return { pay, useSeal };
+  return { pay, discount };
 }
 
 // ---------------------------------------------------------------- setup
@@ -165,22 +235,24 @@ function setup(players, options = {}) {
   const n = players.length;
   if (n < 2 || n > 4) throw new Error('Arcane Guilds needs 2–4 players');
   const config = JSON.parse(JSON.stringify({ ...D.CONFIG, ...(options.config || {}) }));
+  config.omens = { ...D.CONFIG.omens, ...((options.config || {}).omens || {}) };
   const seed = options.seed != null ? options.seed >>> 0 : crypto.randomInt(2 ** 31);
   const state = {
     config, n, seed, rng: seed,
     supply: emptyTokens(),
     decks: { 1: [], 2: [], 3: [] },
     market: { 1: [], 2: [], 3: [] },
-    seals: {},
     guardians: [],
     dragon: { id: null, owner: null },
     players: [],
     phase: 'prophecy',
     turn: null, firstSeat: 0, finalRound: false, turnCount: 0,
     pendingGuardians: [],
+    event: null, eventDeck: [], lastEventRound: null, resolvingEvent: false,
     log: [],
     result: null,
-    stats: { takes: 0, reserves: 0, blindReserves: 0, buys: 0, seals: 0, curses: 0, dragonClaims: 0, dragonSteals: 0, discards: 0, guardians: 0 },
+    stats: { takes: 0, reserves: 0, blindReserves: 0, buys: 0, discards: 0, guardians: 0, exchanges: 0,
+      dragonClaims: 0, dragonSteals: 0, events: 0, omenFizzles: 0, eventsById: {} },
   };
 
   for (const e of ELEMENTS) state.supply[e] = config.tokensPerElement[n];
@@ -189,7 +261,13 @@ function setup(players, options = {}) {
   for (const lv of [1, 2, 3]) {
     state.decks[lv] = shuffle(state, D.CARDS.filter((c) => c.level === lv).map((c) => c.id));
     for (let i = 0; i < 4; i++) state.market[lv].push(state.decks[lv].pop());
+    // omens go in after the opening market is dealt
+    const k = (config.omens.perLevel || {})[lv] || 0;
+    for (let i = 0; i < k; i++) state.decks[lv].push(`${OMEN}:${lv}:${i}`);
+    shuffle(state, state.decks[lv]);
   }
+  const evIds = config.omens.events || D.EVENTS.map((e) => e.id);
+  state.eventDeck = shuffle(state, [...evIds]);
   state.guardians = shuffle(state, D.GUARDIANS.map((g) => g.id)).slice(0, n + 1);
   state.dragon.id = shuffle(state, D.DRAGONS.map((d) => d.id))[0];
 
@@ -197,14 +275,12 @@ function setup(players, options = {}) {
   for (let s = 0; s < n; s++) {
     state.players.push({
       tokens: emptyTokens(), cards: [], reserved: [], guardians: [],
-      prophecy: null, prophecyOptions: prophecies.splice(0, 2),
-      cursesCollected: 0, sealsActive: 0,
+      prophecy: null, prophecyOptions: prophecies.splice(0, 2), starsGained: 0,
     });
   }
 
   state.firstSeat = Math.floor(rng(state) * n);
-  // Turn-order compensation: startTokens[k] = number of different element
-  // crystals the k-th player in turn order starts with (k = 0 is first).
+  // turn-order compensation: startTokens[k] distinct crystals for the k-th player
   let comp = config.startTokens || (config.startTokensByPlayers && config.startTokensByPlayers[n]);
   if (!comp && config.lastSeatBonusToken) comp = [...Array(n - 1).fill(0), 1];
   if (comp) {
@@ -237,6 +313,7 @@ function move(state, seat, m) {
   if (state.phase === 'prophecy') {
     if (m.type !== 'chooseProphecy') return 'ต้องเลือกคำทำนายก่อน';
     const p = state.players[seat];
+    if (!p) return 'คุณไม่ได้อยู่ในเกมนี้';
     if (p.prophecy) return 'คุณเลือกคำทำนายไปแล้ว';
     if (!p.prophecyOptions.includes(m.id)) return 'ไม่มีคำทำนายนี้ให้เลือก';
     p.prophecy = m.id;
@@ -258,12 +335,12 @@ function move(state, seat, m) {
   }
 
   // phase === 'action'
+  if (m.type === 'exchange') return doExchange(state, seat, m.give, m.get); // free, turn continues
   let err;
   switch (m.type) {
     case 'take': err = doTake(state, seat, m.colors); break;
     case 'reserve': err = doReserve(state, seat, m); break;
-    case 'buy': err = doBuy(state, seat, m.cardId, m.curseColor); break;
-    case 'seal': err = doSeal(state, seat, m.cardId, m.color, m.colors); break;
+    case 'buy': err = doBuy(state, seat, m.cardId); break;
     case 'pass':
       if (legalMoves(state, seat).some((x) => x.type !== 'pass')) return 'ยังมีสิ่งที่ทำได้ ผ่านตาไม่ได้';
       log(state, { seat, type: 'pass' });
@@ -274,18 +351,26 @@ function move(state, seat, m) {
   return endOfAction(state, seat);
 }
 
+function takeRules(state) {
+  const drought = activeEvent(state, 'drought');
+  const banned = drought ? drought.element : null;
+  const max = activeEvent(state, 'storm') ? 4 : 3;
+  const avail = ELEMENTS.filter((e) => e !== banned && state.supply[e] > 0);
+  return { banned, max, avail };
+}
+
 function doTake(state, seat, colors) {
-  if (!Array.isArray(colors) || colors.length < 1 || colors.length > 3) return 'เลือกผลึก 1–3 เม็ด';
+  const { banned, max, avail } = takeRules(state);
+  if (!Array.isArray(colors) || colors.length < 1 || colors.length > max) return `เลือกผลึก 1–${max} เม็ด`;
   if (!colors.every((c) => ELEMENTS.includes(c))) return 'เก็บได้เฉพาะผลึกธาตุ (ดวงดาวได้จากการจองเท่านั้น)';
+  if (banned && colors.includes(banned)) return `ธาตุ${D.ELEMENT_INFO[banned].th}ขาดแคลน — เก็บไม่ได้รอบนี้`;
   const p = state.players[seat];
   const distinct = new Set(colors);
   if (colors.length === 2 && distinct.size === 1) {
-    const c = colors[0];
-    if (state.supply[c] < state.config.takeTwoMin) return `เก็บ 2 เม็ดสีเดียวได้เมื่อกองกลางเหลือ ≥ ${state.config.takeTwoMin} เม็ด`;
+    if (state.supply[colors[0]] < state.config.takeTwoMin) return `เก็บ 2 เม็ดสีเดียวได้เมื่อกองกลางเหลือ ≥ ${state.config.takeTwoMin} เม็ด`;
   } else {
     if (distinct.size !== colors.length) return 'ถ้าเก็บหลายเม็ด ต้องเป็นธาตุไม่ซ้ำกัน (หรือ 2 เม็ดสีเดียว)';
-    const available = ELEMENTS.filter((e) => state.supply[e] > 0).length;
-    if (colors.length < Math.min(3, available)) return 'ต้องเก็บ 3 ธาตุ (เก็บน้อยกว่านี้ได้เฉพาะตอนกองกลางมีไม่ครบ)';
+    if (colors.length < Math.min(3, avail.length)) return 'ต้องเก็บ 3 ธาตุ (เก็บน้อยกว่านี้ได้เฉพาะตอนกองกลางมีไม่ครบ)';
     if (colors.some((c) => state.supply[c] < 1)) return 'ผลึกธาตุนั้นหมดแล้ว';
   }
   for (const c of colors) { state.supply[c]--; p.tokens[c]++; }
@@ -293,89 +378,72 @@ function doTake(state, seat, colors) {
   log(state, { seat, type: 'take', colors });
 }
 
+function doExchange(state, seat, give, get) {
+  const ev = activeEvent(state, 'black');
+  if (!ev) return 'ตลาดมืดไม่ได้เปิดอยู่';
+  if (ev.used[seat]) return 'คุณแลกในตลาดมืดไปแล้ว';
+  if (!ELEMENTS.includes(get)) return 'เลือกผลึกที่จะรับให้ถูกต้อง';
+  if (state.supply[get] < 1) return 'ผลึกธาตุนั้นหมดแล้ว';
+  if (!give || typeof give !== 'object') return 'เลือกผลึกที่จะแลก 2 เม็ด';
+  const p = state.players[seat];
+  let total = 0;
+  for (const [t, k] of Object.entries(give)) {
+    if (!TOKEN_TYPES.includes(t) || !Number.isInteger(k) || k < 0 || k > p.tokens[t]) return 'ผลึกที่จะแลกไม่ถูกต้อง';
+    total += k;
+  }
+  if (total !== 2) return 'ต้องแลกผลึก 2 เม็ด';
+  for (const [t, k] of Object.entries(give)) { p.tokens[t] -= k; state.supply[t] += k; }
+  state.supply[get]--; p.tokens[get]++;
+  ev.used[seat] = true;
+  state.stats.exchanges++;
+  log(state, { seat, type: 'exchange', give, get });
+}
+
 function doReserve(state, seat, m) {
   const p = state.players[seat];
   if (p.reserved.length >= state.config.reserveLimit) return `จองได้สูงสุด ${state.config.reserveLimit} ใบ`;
-  let cardId, hidden = false, where = null;
+  let cardId; let hidden = false; let where = null; let lv;
   if (m.cardId) {
     where = findMarket(state, m.cardId);
     if (!where) return 'ไม่มีการ์ดนี้ในตลาด';
     cardId = m.cardId;
   } else {
-    const lv = Number(m.deck);
+    lv = Number(m.deck);
     if (![1, 2, 3].includes(lv)) return 'เลือกกองการ์ดไม่ถูกต้อง';
-    if (!state.decks[lv].length) return 'กองนี้หมดแล้ว';
-    cardId = state.decks[lv][state.decks[lv].length - 1];
+    if (!state.decks[lv].some((x) => !isOmen(x))) return 'กองนี้หมดแล้ว';
     hidden = true;
   }
-  // gold first (it can be used to pay a curse)
-  const after = { ...p.tokens };
   const gotStar = state.supply[STAR] > 0;
-  if (gotStar) after[STAR]++;
-  const plan = where ? planCurse(state, seat, cardId, after, m.curseColor) : { curse: null };
-  if (plan.error) return plan.error;
-
-  if (where) refill(state, where.level, where.index);
-  else state.decks[Number(m.deck)].pop();
-  if (gotStar) { state.supply[STAR]--; p.tokens[STAR]++; }
-  p.reserved.push({ id: cardId, hidden });
+  if (gotStar) { state.supply[STAR]--; p.tokens[STAR]++; p.starsGained = (p.starsGained || 0) + 1; }
+  if (where) {
+    p.reserved.push({ id: cardId, hidden });
+    log(state, { seat, type: 'reserve', cardId, level: CARD[cardId].level, star: gotStar, slot: where });
+    refill(state, where.level, where.index);
+  } else {
+    // blind reserve: omens on top of the deck are revealed on the way
+    const deck = state.decks[lv];
+    while (deck.length && isOmen(deck[deck.length - 1])) { deck.pop(); revealOmen(state, lv); }
+    cardId = deck.pop();
+    p.reserved.push({ id: cardId, hidden });
+    log(state, { seat, type: 'reserve', cardId: null, level: lv, star: gotStar });
+  }
   state.stats.reserves++;
   if (hidden) state.stats.blindReserves++;
-  if (where) applyCurse(state, cardId, plan.curse);
-  log(state, { seat, type: 'reserve', cardId: hidden ? null : cardId, level: CARD[cardId].level, star: gotStar });
 }
 
-function doBuy(state, seat, cardId, curseColor) {
+function doBuy(state, seat, cardId) {
   const p = state.players[seat];
   const where = findMarket(state, cardId);
   const rIdx = p.reserved.findIndex((r) => r.id === cardId);
   if (!where && rIdx === -1) return 'ซื้อได้เฉพาะการ์ดในตลาดหรือที่คุณจองไว้';
   const plan = planPayment(state, seat, cardId);
   if (!plan) return 'ผลึกไม่พอซื้อการ์ดใบนี้';
-  const after = { ...p.tokens };
-  for (const t of TOKEN_TYPES) after[t] -= plan.pay[t];
-  const cplan = where ? planCurse(state, seat, cardId, after, curseColor) : { curse: null };
-  if (cplan.error) return cplan.error;
-
   for (const t of TOKEN_TYPES) { p.tokens[t] -= plan.pay[t]; state.supply[t] += plan.pay[t]; }
-  if (where) {
-    const seal = state.seals[cardId];
-    if (seal && seal.seat === seat) {
-      delete state.seals[cardId];
-      p.sealsActive -= 1;
-      if (plan.useSeal) state.supply[seal.color] += 1; // spent as a wild
-      else p.tokens[seal.color] += 1;                // not needed: comes home
-    } else {
-      applyCurse(state, cardId, cplan.curse);
-    }
-    refill(state, where.level, where.index);
-  } else {
-    p.reserved.splice(rIdx, 1);
-  }
+  if (rIdx !== -1 && !where) p.reserved.splice(rIdx, 1);
   p.cards.push(cardId);
   state.stats.buys++;
-  log(state, { seat, type: 'buy', cardId, from: where ? 'market' : 'reserve' });
-}
-
-function doSeal(state, seat, cardId, color, extra) {
-  const p = state.players[seat];
-  const cfg = state.config.seal;
-  const takeWith = cfg.takeWith || 0;
-  extra = extra || [];
-  if (!Array.isArray(extra) || extra.length > takeWith) return takeWith ? `วางผนึกแล้วเก็บผลึกเพิ่มได้ไม่เกิน ${takeWith} เม็ด` : 'การวางผนึกไม่ได้ผลึกเพิ่ม';
-  if (new Set(extra).size !== extra.length || !extra.every((c) => ELEMENTS.includes(c) && state.supply[c] > 0)) return 'ผลึกที่เก็บเพิ่มต้องเป็นธาตุต่างกันและยังมีในกองกลาง';
-  if (cfg.maxPerPlayer <= 0) return 'ปิดใช้ผนึกเวทในเกมนี้';
-  if (!findMarket(state, cardId)) return 'ผนึกได้เฉพาะการ์ดที่เปิดอยู่ในตลาด';
-  if (state.seals[cardId]) return 'การ์ดใบนี้มีผนึกอยู่แล้ว';
-  if (p.sealsActive >= cfg.maxPerPlayer) return `มีผนึกค้างได้สูงสุด ${cfg.maxPerPlayer} อัน`;
-  if (!ELEMENTS.includes(color)) return 'ใช้ผลึกธาตุวางผนึก (ใช้ดวงดาวไม่ได้)';
-  if (p.tokens[color] < 1) return 'คุณไม่มีผลึกธาตุนั้น';
-  p.tokens[color]--;
-  p.sealsActive++;
-  state.seals[cardId] = { seat, color };
-  for (const c of extra) { state.supply[c]--; p.tokens[c]++; }
-  state.stats.seals++;
-  log(state, { seat, type: 'seal', cardId, color });
+  log(state, { seat, type: 'buy', cardId, from: where ? 'market' : 'reserve', pay: plan.pay, slot: where || null });
+  if (where) refill(state, where.level, where.index);
 }
 
 // ---------------------------------------------------------------- end of turn
@@ -419,8 +487,8 @@ function checkGuardians(state, seat) {
 function grantGuardian(state, seat, id) {
   state.guardians = state.guardians.filter((g) => g !== id);
   state.players[seat].guardians.push(id);
-  state.stats.guardians++;
   state.pendingGuardians = [];
+  state.stats.guardians++;
   log(state, { seat, type: 'guardian', id });
 }
 
@@ -435,13 +503,15 @@ function afterGuardians(state, seat) {
   if ((state.finalRound && next === state.firstSeat) || state.turnCount >= MAX_TURNS) {
     return finish(state);
   }
+  if (state.event) {
+    state.event.remaining -= 1;
+    if (state.event.remaining <= 0) {
+      log(state, { seat: null, type: 'eventEnd', event: state.event.id });
+      state.event = null;
+    }
+  }
   state.turn = next;
   state.turnCount += 1;
-}
-
-function dragonReq(config, id) {
-  const n = config.dragonReq;
-  return Object.fromEntries(Object.keys(DRAGON[id].req).map((e) => [e, n]));
 }
 
 function checkDragon(state, seat) {
@@ -460,7 +530,7 @@ function checkDragon(state, seat) {
     const bb = bonuses(state, s);
     return Object.keys(req).reduce((a, e) => a + bb[e], 0);
   };
-  const mine = strength(seat), theirs = strength(owner);
+  const mine = strength(seat); const theirs = strength(owner);
   if (mine > theirs || (mine === theirs && state.config.dragonStealOnTie)) {
     state.dragon.owner = seat;
     state.stats.dragonSteals++;
@@ -471,6 +541,7 @@ function checkDragon(state, seat) {
 function finish(state) {
   state.phase = 'over';
   state.turn = null;
+  state.event = null;
   const scores = state.players.map((_, s) => ({ seat: s, ...scoreOf(state, s), cards: state.players[s].cards.length }));
   const best = Math.max(...scores.map((x) => x.total));
   let top = scores.filter((x) => x.total === best);
@@ -481,43 +552,32 @@ function finish(state) {
 }
 
 // ---------------------------------------------------------------- legal moves
-// Enumerates action-phase moves (used for `pass` validation and bots).
+// Enumerates turn-ending action-phase moves (used for `pass` validation and
+// bots). The free black-market exchange is not listed.
 function legalMoves(state, seat) {
   const out = [];
   if (state.phase === 'over' || seat !== state.turn) return out;
   const p = state.players[seat];
-  if (state.phase === 'discard') return [{ type: 'discard' }]; // bots compute their own amounts
+  if (state.phase === 'discard') return [{ type: 'discard' }];
   if (state.phase === 'guardian') return state.pendingGuardians.map((id) => ({ type: 'chooseGuardian', id }));
 
-  const avail = ELEMENTS.filter((e) => state.supply[e] > 0);
-  const k = Math.min(3, avail.length);
+  const { max, avail } = takeRules(state);
   const combos = (arr, r, start = 0, acc = []) => {
     if (acc.length === r) { out.push({ type: 'take', colors: [...acc] }); return; }
     for (let i = start; i < arr.length; i++) { acc.push(arr[i]); combos(arr, r, i + 1, acc); acc.pop(); }
   };
+  const k = Math.min(3, avail.length);
   if (k > 0) combos(avail, k);
-  for (const e of ELEMENTS) if (state.supply[e] >= state.config.takeTwoMin) out.push({ type: 'take', colors: [e, e] });
+  if (max === 4 && avail.length >= 4) combos(avail, 4);
+  for (const e of avail) if (state.supply[e] >= state.config.takeTwoMin) out.push({ type: 'take', colors: [e, e] });
 
   const marketIds = [1, 2, 3].flatMap((lv) => state.market[lv].filter(Boolean));
-  const canPayCurse = (cardId, after) => !planCurse(state, seat, cardId, after).error;
-
   if (p.reserved.length < state.config.reserveLimit) {
-    const after = { ...p.tokens };
-    if (state.supply[STAR] > 0) after[STAR]++;
-    for (const id of marketIds) if (canPayCurse(id, after)) out.push({ type: 'reserve', cardId: id });
-    for (const lv of [1, 2, 3]) if (state.decks[lv].length) out.push({ type: 'reserve', deck: lv });
+    for (const id of marketIds) out.push({ type: 'reserve', cardId: id });
+    for (const lv of [1, 2, 3]) if (state.decks[lv].some((x) => !isOmen(x))) out.push({ type: 'reserve', deck: lv });
   }
   for (const id of [...marketIds, ...p.reserved.map((r) => r.id)]) {
-    const plan = planPayment(state, seat, id);
-    if (!plan) continue;
-    const after = { ...p.tokens };
-    for (const t of TOKEN_TYPES) after[t] -= plan.pay[t];
-    if (findMarket(state, id) && !canPayCurse(id, after)) continue;
-    out.push({ type: 'buy', cardId: id });
-  }
-  if (p.sealsActive < state.config.seal.maxPerPlayer) {
-    const colors = ELEMENTS.filter((e) => p.tokens[e] > 0);
-    for (const id of marketIds) if (!state.seals[id]) for (const c of colors) out.push({ type: 'seal', cardId: id, color: c });
+    if (planPayment(state, seat, id)) out.push({ type: 'buy', cardId: id });
   }
   if (!out.length) out.push({ type: 'pass' });
   return out;
@@ -537,25 +597,26 @@ function view(state, seat) {
       reserved: p.reserved.map((r) => (mine || over || !r.hidden ? { id: r.id, hidden: r.hidden } : { id: null, hidden: true, level: CARD[r.id].level })),
       guardians: p.guardians,
       points: publicPoints(state, s),
-      cursesCollected: p.cursesCollected,
-      sealsActive: p.sealsActive,
+      starsGained: p.starsGained || 0,
       prophecyChosen: !!p.prophecy,
       prophecy: mine || over ? p.prophecy : null,
       prophecyOptions: mine && state.phase === 'prophecy' ? p.prophecyOptions : undefined,
     };
   });
+  const ev = state.event;
   return {
     phase: state.phase,
     turn: state.turn,
     firstSeat: state.firstSeat,
     finalRound: state.finalRound,
     turnCount: state.turnCount,
+    round: state.turnCount ? round(state) : 0,
     supply: state.supply,
     market: state.market,
-    deckCounts: { 1: state.decks[1].length, 2: state.decks[2].length, 3: state.decks[3].length },
-    seals: state.seals,
+    deckCounts: Object.fromEntries([1, 2, 3].map((lv) => [lv, state.decks[lv].length])),
     guardians: state.guardians,
     dragon: state.dragon,
+    event: ev ? { id: ev.id, remaining: ev.remaining, by: ev.by, element: ev.element, usedByMe: !!ev.used[seat] } : null,
     pendingGuardians: state.phase === 'guardian' && state.turn === seat ? state.pendingGuardians : [],
     discardNeeded: state.phase === 'discard' && state.turn === seat
       ? sumTokens(state.players[seat].tokens) - state.config.tokenLimit : 0,
@@ -570,7 +631,7 @@ function view(state, seat) {
 // hidden information stay in `view`).
 const clientData = {
   elements: ELEMENTS, star: STAR, elementInfo: D.ELEMENT_INFO,
-  cards: D.CARDS, guardians: D.GUARDIANS, dragons: D.DRAGONS, prophecies: D.PROPHECIES,
+  cards: D.CARDS, guardians: D.GUARDIANS, dragons: D.DRAGONS, prophecies: D.PROPHECIES, events: D.EVENTS,
 };
 
 module.exports = {
@@ -585,6 +646,6 @@ module.exports = {
   currentTurn: (state) => (state.phase === 'over' || state.phase === 'prophecy' ? null : state.turn),
   isOver: (state) => state.phase === 'over',
   // extras for bots / simulation / tests
-  legalMoves, scoreOf, dragonReq, publicPoints, bonuses, planPayment, sumTokens,
-  CARD, GUARDIAN, DRAGON, PROPHECY, TOKEN_TYPES,
+  legalMoves, scoreOf, dragonReq, publicPoints, bonuses, planPayment, sumTokens, takeRules, triggerEvent, isOmen,
+  CARD, GUARDIAN, DRAGON, PROPHECY, EVENT, TOKEN_TYPES,
 };

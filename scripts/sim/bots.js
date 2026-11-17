@@ -3,24 +3,23 @@
 // it never peeks at other players' prophecies, blind reserves or deck order.
 //
 // One evaluator, different weights per style:
-//   balanced · points · engine · sealer · dragon
+//   balanced · points · engine · dragon · strong
 
 const G = require('../../server/games/arcane/engine');
 const { ELEMENTS } = require('../../server/games/arcane/data');
 
 const STYLES = {
-  balanced: { pts: 1.0, bonus: 0.35, guard: 0.6, dragon: 0.4, proph: 0.5, seal: 0.4, deny: 0.6, reserve: 0.5 },
-  points:   { pts: 1.4, bonus: 0.20, guard: 0.3, dragon: 0.2, proph: 0.4, seal: 0.1, deny: 0.4, reserve: 0.6 },
-  engine:   { pts: 0.7, bonus: 0.60, guard: 1.0, dragon: 0.5, proph: 0.6, seal: 0.2, deny: 0.3, reserve: 0.3 },
-  sealer:   { pts: 1.0, bonus: 0.35, guard: 0.5, dragon: 0.3, proph: 0.5, seal: 1.6, deny: 0.8, reserve: 0.4 },
-  dragon:   { pts: 0.9, bonus: 0.35, guard: 0.4, dragon: 1.6, proph: 0.5, seal: 0.3, deny: 0.5, reserve: 0.4 },
+  balanced: { pts: 1.0, bonus: 0.35, guard: 0.6, dragon: 0.4, proph: 0.5, deny: 0.6, reserve: 0.5 },
+  points:   { pts: 1.4, bonus: 0.20, guard: 0.3, dragon: 0.2, proph: 0.4, deny: 0.4, reserve: 0.6 },
+  engine:   { pts: 0.7, bonus: 0.60, guard: 1.0, dragon: 0.5, proph: 0.6, deny: 0.3, reserve: 0.3 },
+  dragon:   { pts: 0.9, bonus: 0.35, guard: 0.4, dragon: 1.6, proph: 0.5, deny: 0.5, reserve: 0.4 },
   // tuned by self-play hill-climbing (scripts/sim/hill.js) — strongest so far
-  strong:   { pts: 0.46, bonus: 0.69, guard: 1.24, dragon: 0.44, proph: 0.38, seal: 0.18, deny: 0.3, reserve: 0.15 },
+  strong:   { pts: 0.46, bonus: 0.69, guard: 1.24, dragon: 0.44, proph: 0.38, deny: 0.3, reserve: 0.15 },
 };
 
 const PROPHECY_PREF = {
   points: ['p-legend'], engine: ['p-trainee', 'p-balance', 'p-spirits'],
-  sealer: ['p-sealer'], dragon: ['p-dragon'], balanced: ['p-spirits', 'p-balance'],
+  dragon: ['p-dragon'], balanced: ['p-spirits', 'p-balance'],
 };
 
 const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
@@ -103,14 +102,9 @@ function makeBot(style, rand = Math.random) {
 
   function scoreMove(view, seat, m, ctx, need) {
     const tokCount = sum(ctx.t);
-    const pr = ctx.me.prophecy;
-    const sealBoost = pr === 'p-sealer' ? 1.0 : 0;
     switch (m.type) {
       case 'buy': {
         let v = ctx.cardValue(m.cardId) + 0.6;
-        const seal = view.seals[m.cardId];
-        if (seal && seal.seat !== seat) v -= 0.5;
-        if (seal && seal.seat === seat) v += 0.2;
         if (ctx.myReserved.includes(m.cardId)) v += 0.3; // frees a reserve slot
         return v;
       }
@@ -134,33 +128,7 @@ function makeBot(style, rand = Math.random) {
           if (p.seat === seat) continue;
           if (ctx.shortage(m.cardId, p.tokens, p.bonuses) === 0 && c.points >= 3) v += W.deny * c.points * 0.35;
         }
-        const seal = view.seals[m.cardId];
-        if (seal && seal.seat !== seat) v -= 0.5;
         if (c.points === 0) v -= 0.4;
-        return v;
-      }
-      case 'seal': {
-        if (W.seal + sealBoost <= 0) return -9;
-        const c = G.CARD[m.cardId];
-        let v = -0.35; // tempo + a token locked away
-        const takeWith = view.config.seal.takeWith || 0;
-        if (takeWith) {
-          const left = { ...need };
-          const picks = ELEMENTS.filter((e) => view.supply[e] > 0 && e !== m.color)
-            .sort((a, b2) => left[b2] - left[a]).slice(0, takeWith);
-          m.colors = picks;
-          for (const e of picks) v += 0.5 * left[e];
-        }
-        const tgt = ctx.targets.find((x) => x.id === m.cardId);
-        const ws = W.seal + sealBoost;
-        if (tgt && tgt.s <= 2) v += ws * 0.35 * tgt.v;
-        for (const p of view.players) {
-          if (p.seat === seat) continue;
-          const s = ctx.shortage(m.cardId, p.tokens, p.bonuses);
-          if (s <= 1) v += ws * (0.25 + 0.12 * c.points);
-        }
-        // seal with the colour I need least
-        v -= 0.05 * need[m.color];
         return v;
       }
       case 'pass': return -10;

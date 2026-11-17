@@ -4,22 +4,24 @@
 ใช้ได้ทั้งบนไอแพด (แตะ) และคอมพิวเตอร์ (เมาส์/คีย์บอร์ด)
 
 Multiplayer web board game — magic-academy theme, Splendor-style engine building with three
-original mechanics (seals, secret prophecies, a contested dragon). Node.js + Express + Socket.io,
+original mechanics (random omen events, secret prophecies, a contested dragon). Node.js + Express + Socket.io,
 server-authoritative rules, no database.
 
 - กฎเกมฉบับเต็ม: [`docs/arcane-guilds-design.md`](docs/arcane-guilds-design.md)
 - ตารางการ์ดทั้งหมด: [`docs/cards.md`](docs/cards.md)
-- รายงานสมดุลเกม (บอทเล่น 160,000+ เกม): [`docs/simulation-report.md`](docs/simulation-report.md)
+- รายงานสมดุลเกม (บอทเล่น 220,000+ เกม): [`docs/simulation-report.md`](docs/simulation-report.md)
 
 ## Features
-- **Gameplay:** 90 original cards, 10 guardian spirits, 5 dragons, 11 secret prophecies; every rule
+- **Gameplay:** 90 original cards, 10 guardian spirits, 5 dragons, 11 secret prophecies, 8 omen events
+  hidden in the decks; every rule
   enforced on the server (the browser can't cheat); per-player hidden information (prophecies,
   blind reserves, deck order never leave the server)
-- **Balance:** tuned with heuristic bots + self-play hill-climbing across 160k simulated games
-  (turn-order compensation, seal/dragon/prophecy values) — see the report
+- **Balance:** tuned with heuristic bots + self-play hill-climbing across 220k+ simulated games
+  (turn-order compensation, event frequency, dragon/prophecy values) — see the report
 - **Multiplayer:** rooms with 4-letter codes + share link (`/?room=ABCD`), lobby, host hand-off,
   reconnect after refresh / network drop, in-game chat
-- **iPad + desktop UI:** responsive board (landscape/portrait), tap-to-select crystals, action
+- **iPad + desktop UI:** responsive board (landscape/portrait), everyone's purchased cards visible,
+  animated crystals/cards flying to their owner, event banners, tap-to-select crystals, action
   sheet with payment preview, colour-blind-safe crystal shapes, PWA (Add to Home Screen)
 - **Hardening:** per-socket rate limit, input validation, 16 KB message cap, idle-room cleanup,
   security headers, no-cache for code so deploys show up immediately
@@ -28,9 +30,9 @@ server-authoritative rules, no database.
 ```bash
 npm install
 npm run dev          # http://localhost:3000  (open 2 tabs to play against yourself)
-npm test             # 33 tests: rules, rooms, end-to-end sockets
+npm test             # 39 tests: rules, events, rooms, end-to-end sockets
 npm run cards        # regenerate docs/cards.md from the card data
-npm run sim:quick    # quick balance check (~30 s); `npm run sim` for the full run
+npm run sim:quick    # quick balance check (~30 s); `npm run sim` for the full run (~6 min)
 ```
 To play from an iPad on the same Wi-Fi: open `http://<your-PC-IP>:3000`.
 

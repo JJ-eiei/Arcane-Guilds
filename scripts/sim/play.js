@@ -46,7 +46,7 @@ function playGame({ styles, seed, config }) {
     prophecies: state.players.map((p, i) => ({ id: p.prophecy, met: r.scores[i].prophecy > 0 })),
     prophecySwing: !pubWinners.includes(r.winners[0]) || pubWinners.length !== r.winners.length,
     guardiansTaken: state.players.map((p) => p.guardians.length),
-    sealsActiveAtEnd: Object.keys(state.seals).length,
+    events: state.stats.events,
   };
 }
 

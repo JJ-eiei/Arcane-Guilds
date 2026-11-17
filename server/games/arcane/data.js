@@ -139,13 +139,28 @@ function buildProphecies() {
     { id: 'p-balance', name: 'ผู้สมดุล', points: 2, text: 'จบเกมโดยมีโบนัสทุกธาตุ ≥ 2', kind: 'allBonus', min: 2 },
     { id: 'p-spirits', name: 'ผู้สื่อวิญญาณ', points: 3, text: 'มีภูตพิทักษ์ ≥ 2 ตน', kind: 'guardians', min: 2 },
     { id: 'p-dragon', name: 'นายมังกร', points: 2, text: 'ครองมังกรอยู่ตอนจบเกม', kind: 'dragon' },
-    { id: 'p-sealer', name: 'ผู้วางผนึก', points: 3, text: 'เก็บค่าสาปจากผนึกได้ ≥ 3 ครั้ง', kind: 'curses', min: 3 },
+    { id: 'p-summoner', name: 'นักอัญเชิญ', points: 3, text: 'มีการ์ด Lv2 ≥ 4 ใบ', kind: 'levelCount', level: 2, min: 4 },
     { id: 'p-trainee', name: 'ผู้ฝึกตน', points: 2, text: 'มีการ์ด Lv1 ≥ 12 ใบ', kind: 'levelCount', level: 1, min: 12 },
     { id: 'p-legend', name: 'ผู้สร้างตำนาน', points: 2, text: 'มีการ์ด Lv3 ≥ 1 ใบ', kind: 'levelCount', level: 3, min: 1 },
   ];
 }
 
 // Tunable rule numbers (⚙️ in the design doc).
+// Omen events (ลางบอกเหตุ). Omen cards are shuffled into the decks after the
+// opening market is dealt; revealing one while refilling the market triggers
+// the next event from a shuffled event deck.
+//   instant: happens once · round: lasts until the revealer's next turn ends
+const EVENTS = [
+  { id: 'wrath',    name: 'มังกรพิโรธ',    icon: '🐉', kind: 'instant', text: 'ทุกคนที่ถือผลึกเกิน 6 เม็ด เสียผลึก 2 เม็ด (สีที่มีมากที่สุด) — เจ้าของมังกรรอด' },
+  { id: 'black',    name: 'ตลาดมืด',       icon: '🌑', kind: 'round',   text: 'ในตาของคุณ แลกผลึก 2 เม็ด เป็น 1 เม็ดสีไหนก็ได้ (ได้ 1 ครั้ง ไม่เสียตา)' },
+  { id: 'eclipse',  name: 'สุริยุปราคา',    icon: '🌘', kind: 'instant', text: 'การ์ด Lv3 บนโต๊ะทั้งหมดถูกเก็บใต้กอง แล้วเปิดใหม่ 4 ใบ' },
+  { id: 'storm',    name: 'พายุมานา',      icon: '🌪️', kind: 'round',   text: 'เก็บผลึกได้ถึง 4 ธาตุไม่ซ้ำ (แทน 3)' },
+  { id: 'meteor',   name: 'ฝนดาวตก',       icon: '☄️', kind: 'instant', text: 'ทุกคนได้ ⭐ คนละ 1 เม็ด (เท่าที่กองยังเหลือ เริ่มจากคนที่เปิดเจอ)' },
+  { id: 'drought',  name: 'ธาตุขาดแคลน',   icon: '🏜️', kind: 'round',   text: 'สุ่ม 1 ธาตุ — ห้ามเก็บผลึกธาตุนั้น' },
+  { id: 'festival', name: 'เทศกาลนักเวท',  icon: '🎪', kind: 'round',   text: 'การ์ด Lv1 ลดราคา 1 เม็ด (สีไหนก็ได้)' },
+  { id: 'wanderer', name: 'ภูตหลงทาง',     icon: '👻', kind: 'instant', text: 'ภูตพิทักษ์ตนใหม่จากกล่องมาปรากฏบนโต๊ะ' },
+];
+
 const CONFIG = {
   winPoints: 15,
   tokenLimit: 10,
@@ -153,9 +168,6 @@ const CONFIG = {
   takeTwoMin: 4,
   starTokens: 5,
   tokensPerElement: { 2: 4, 3: 5, 4: 7 },
-  // seal action: place 1 own element crystal on a market card AND take up to
-  // `takeWith` different crystals; owner buying it uses the seal as `ownerWildCount` wilds
-  seal: { maxPerPlayer: 2, curse: 1, ownerWild: true, ownerWildCount: 2, takeWith: 2 },
   dragonPoints: 4,
   dragonReq: 3,          // bonuses needed in each of the dragon's 2 elements
   dragonStealOnTie: true, // equal strength also steals (on your own turn)
@@ -164,10 +176,16 @@ const CONFIG = {
   startTokens: null,      // explicit override, e.g. [0, 1, 1, 2] = crystals per turn-order position
   // turn-order compensation by player count (from balance simulation)
   startTokensByPlayers: { 2: [0, 0], 3: [0, 1, 1], 4: [0, 1, 1, 1] },
+  omens: {
+    perLevel: { 1: 3, 2: 2, 3: 1 },   // omen cards shuffled into each deck (≈2 events/game)
+    firstRound: 4,                    // omens revealed before this round fizzle
+    minGap: 3,                        // rounds between two events (closer ones fizzle)
+    events: null,                     // null = all EVENTS; or a list of ids
+  },
 };
 
 module.exports = {
-  ELEMENTS, STAR, ELEMENT_INFO, TEMPLATES, CONFIG,
+  ELEMENTS, STAR, ELEMENT_INFO, TEMPLATES, CONFIG, EVENTS,
   CARDS: buildCards(),
   GUARDIANS: buildGuardians(),
   DRAGONS: buildDragons(),

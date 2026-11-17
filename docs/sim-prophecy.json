@@ -1,0 +1,46 @@
+{
+  "p-balance": {
+    "met": 76.4,
+    "winIndex": 1.05
+  },
+  "p-dragon": {
+    "met": 41.9,
+    "winIndex": 1.1
+  },
+  "p-earth": {
+    "met": 28.1,
+    "winIndex": 1.04
+  },
+  "p-fire": {
+    "met": 26.8,
+    "winIndex": 0.91
+  },
+  "p-legend": {
+    "met": 28.8,
+    "winIndex": 0.91
+  },
+  "p-light": {
+    "met": 26.9,
+    "winIndex": 0.96
+  },
+  "p-spirits": {
+    "met": 37.4,
+    "winIndex": 1.1
+  },
+  "p-summoner": {
+    "met": 34.1,
+    "winIndex": 0.92
+  },
+  "p-trainee": {
+    "met": 42.3,
+    "winIndex": 1.07
+  },
+  "p-water": {
+    "met": 26.1,
+    "winIndex": 0.97
+  },
+  "p-wind": {
+    "met": 26.9,
+    "winIndex": 0.97
+  }
+}
