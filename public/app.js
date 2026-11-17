@@ -140,7 +140,7 @@
     }));
     sel.value = game.id;
     sel.disabled = !isHost();
-    $('#game-pick-wrap').hidden = snap.games.length < 2 && !isHost();
+    $('#game-pick-wrap').hidden = snap.games.length < 2;
     $('#game-info').textContent = game.minPlayers === game.maxPlayers
       ? `เล่น ${game.minPlayers} คน` : `เล่น ${game.minPlayers}–${game.maxPlayers} คน`;
 

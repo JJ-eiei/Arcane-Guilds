@@ -1,6 +1,6 @@
 // Registry of available games. Add your game module here.
 const games = [
-  require('./connect4'),
+  require('./arcane/engine'),
 ];
 
 const byId = Object.fromEntries(games.map((g) => [g.id, g]));

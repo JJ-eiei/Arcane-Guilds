@@ -1,14 +1,27 @@
 {
-  "name": "Board Game Online",
-  "short_name": "Board Game",
+  "name": "Arcane Guilds",
+  "short_name": "Arcane Guilds",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#1d2b2a",
-  "theme_color": "#1d2b2a",
+  "background_color": "#1b1240",
+  "theme_color": "#1b1240",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }
-  ]
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "description": "เกมบอร์ดสำนักเวทมนตร์ เล่นกับเพื่อน 2–4 คน"
 }

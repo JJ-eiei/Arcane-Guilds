@@ -1,5 +1,7 @@
 # Adding a game
 
+The live game is `arcane/` (Arcane Guilds). The framework can host more games:
+
 A game is two files with the same id:
 
 | File | Runs on | Job |

@@ -11,10 +11,25 @@ app.disable('x-powered-by');
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
 });
 app.get('/healthz', (req, res) => res.json({ ok: true, rooms: rooms.rooms.size }));
-app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h', index: 'index.html' }));
+app.get('/api/games/:id/data', (req, res) => {
+  const game = require('./games').get(req.params.id);
+  if (!game || !game.clientData) return res.status(404).json({ error: 'not found' });
+  res.set('Cache-Control', 'public, max-age=300').json(game.clientData);
+});
+// Code/HTML always revalidate (so a deploy is picked up immediately);
+// images can be cached for a day.
+app.use(express.static(path.join(__dirname, '..', 'public'), {
+  index: 'index.html',
+  setHeaders(res, file) {
+    if (/\.(html|js|css|webmanifest|json)$/.test(file)) res.setHeader('Cache-Control', 'no-cache');
+    else res.setHeader('Cache-Control', 'public, max-age=86400');
+  },
+}));
 
 const server = http.createServer(app);
 const io = new Server(server, {

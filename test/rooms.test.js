@@ -2,25 +2,40 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { RoomManager, RoomError } = require('../server/rooms');
 
-test('create, join, start, play to a win', () => {
+test('create, join (max 4), start, play a full Arcane Guilds game through the room, rematch', () => {
+  const { makeBot } = require('../scripts/sim/bots');
   const rm = new RoomManager();
   const { room, player: a } = rm.create({ name: 'A', socketId: 's1' });
   assert.match(room.code, /^[A-Z]{4}$/);
-  const { player: b } = rm.join({ code: room.code.toLowerCase(), name: 'B', socketId: 's2' });
-  assert.throws(() => rm.join({ code: room.code, name: 'C', socketId: 's3' }), RoomError); // full (2p)
-  assert.throws(() => rm.start({ code: room.code, byId: b.id }), /หัวห้อง/);
+  assert.equal(room.gameId, 'arcane');
+  assert.throws(() => rm.start({ code: room.code, byId: a.id }), /อย่างน้อย 2/);
+  const others = ['B', 'C', 'D'].map((n, i) => rm.join({ code: room.code.toLowerCase(), name: n, socketId: `s${i + 2}` }).player);
+  assert.throws(() => rm.join({ code: room.code, name: 'E', socketId: 's9' }), /เต็ม/);
+  assert.throws(() => rm.start({ code: room.code, byId: others[0].id }), /หัวห้อง/);
   rm.start({ code: room.code, byId: a.id });
-  assert.throws(() => rm.move({ code: room.code, playerId: b.id, move: { col: 0 } }), /ยังไม่ถึงตา/);
-  for (let i = 0; i < 3; i++) {
-    rm.move({ code: room.code, playerId: a.id, move: { col: 0 } });
-    rm.move({ code: room.code, playerId: b.id, move: { col: 1 } });
+  assert.throws(() => rm.join({ code: room.code, name: 'Late', socketId: 's10' }), /เริ่มเกมไปแล้ว/);
+  const players = [a, ...others];
+  const bots = players.map(() => makeBot('strong', () => 0.5));
+  // prophecy picks are simultaneous; a normal move before picking is refused
+  assert.throws(() => rm.move({ code: room.code, playerId: a.id, move: { type: 'take', colors: ['fire', 'water', 'earth'] } }), /คำทำนาย/);
+  let guard = 0;
+  while (room.status === 'playing' && guard++ < 2000) {
+    const st = room.state;
+    const seat = st.phase === 'prophecy' ? st.players.findIndex((p) => !p.prophecy) : st.turn;
+    const wrong = players.find((p) => p.seat !== seat);
+    if (st.phase === 'action') {
+      assert.throws(() => rm.move({ code: room.code, playerId: wrong.id, move: { type: 'pass' } }), /ยังไม่ถึงตา/);
+    }
+    rm.move({ code: room.code, playerId: players.find((p) => p.seat === seat).id, move: bots[seat].act(st, seat) });
   }
-  rm.move({ code: room.code, playerId: a.id, move: { col: 0 } });
   assert.equal(room.status, 'over');
-  assert.equal(room.state.winner, 0);
-  // rematch
+  const snap = rm.snapshot(room, a.id);
+  assert.ok(snap.view.result.winners.length >= 1);
+  assert.equal(snap.turnSeat, null);
+  // rematch from the game-over screen
   rm.start({ code: room.code, byId: a.id });
   assert.equal(room.status, 'playing');
+  assert.equal(room.state.phase, 'prophecy');
 });
 
 test('resume with token, reject bad token, duplicate names', () => {

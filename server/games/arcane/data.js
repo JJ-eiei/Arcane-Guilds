@@ -116,12 +116,13 @@ function buildGuardians() {
   return out;
 }
 
-// Dragons: one per game, 4/4 in two elements (i, i+2), 4 prestige, can be stolen.
+// Dragons: one per game, 3/3 in two elements (i, i+2), 4 prestige, can be stolen
+// (equal strength also steals). The amount comes from CONFIG.dragonReq.
 const DRAGON_NAMES = ['มังกรเพลิงผา', 'มังกรวายุวารี', 'มังกรศิลาแสง', 'มังกรพายุเพลิง', 'มังกรจันทราวารี'];
 function buildDragons() {
   return ELEMENTS.map((el, i) => ({
     id: `d${i + 1}`, name: DRAGON_NAMES[i], points: 4,
-    req: { [el]: 4, [rot(el, 2)]: 4 },
+    req: { [el]: 3, [rot(el, 2)]: 3 },
   }));
 }
 
@@ -130,17 +131,17 @@ function buildDragons() {
 function buildProphecies() {
   const byElement = ELEMENTS.map((el) => ({
     id: `p-${el}`, name: `บุตรแห่ง${ELEMENT_INFO[el].th}`, points: 3,
-    text: `จบเกมโดยมีโบนัส${ELEMENT_INFO[el].th} ${ELEMENT_INFO[el].icon} ≥ 5`,
-    kind: 'elementBonus', element: el, min: 5,
+    text: `จบเกมโดยมีโบนัส${ELEMENT_INFO[el].th} ${ELEMENT_INFO[el].icon} ≥ 4`,
+    kind: 'elementBonus', element: el, min: 4,
   }));
   return [
     ...byElement,
-    { id: 'p-balance', name: 'ผู้สมดุล', points: 3, text: 'จบเกมโดยมีโบนัสทุกธาตุ ≥ 2', kind: 'allBonus', min: 2 },
+    { id: 'p-balance', name: 'ผู้สมดุล', points: 2, text: 'จบเกมโดยมีโบนัสทุกธาตุ ≥ 2', kind: 'allBonus', min: 2 },
     { id: 'p-spirits', name: 'ผู้สื่อวิญญาณ', points: 3, text: 'มีภูตพิทักษ์ ≥ 2 ตน', kind: 'guardians', min: 2 },
     { id: 'p-dragon', name: 'นายมังกร', points: 2, text: 'ครองมังกรอยู่ตอนจบเกม', kind: 'dragon' },
     { id: 'p-sealer', name: 'ผู้วางผนึก', points: 3, text: 'เก็บค่าสาปจากผนึกได้ ≥ 3 ครั้ง', kind: 'curses', min: 3 },
-    { id: 'p-trainee', name: 'ผู้ฝึกตน', points: 2, text: 'มีการ์ด Lv1 ≥ 7 ใบ', kind: 'levelCount', level: 1, min: 7 },
-    { id: 'p-legend', name: 'ผู้สร้างตำนาน', points: 3, text: 'มีการ์ด Lv3 ≥ 2 ใบ', kind: 'levelCount', level: 3, min: 2 },
+    { id: 'p-trainee', name: 'ผู้ฝึกตน', points: 2, text: 'มีการ์ด Lv1 ≥ 12 ใบ', kind: 'levelCount', level: 1, min: 12 },
+    { id: 'p-legend', name: 'ผู้สร้างตำนาน', points: 2, text: 'มีการ์ด Lv3 ≥ 1 ใบ', kind: 'levelCount', level: 3, min: 1 },
   ];
 }
 
@@ -152,13 +153,17 @@ const CONFIG = {
   takeTwoMin: 4,
   starTokens: 5,
   tokensPerElement: { 2: 4, 3: 5, 4: 7 },
-  seal: { maxPerPlayer: 2, curse: 1, ownerWild: true, ownerWildCount: 1, takeWith: 0 },
+  // seal action: place 1 own element crystal on a market card AND take up to
+  // `takeWith` different crystals; owner buying it uses the seal as `ownerWildCount` wilds
+  seal: { maxPerPlayer: 2, curse: 1, ownerWild: true, ownerWildCount: 2, takeWith: 2 },
   dragonPoints: 4,
-  dragonReq: 4,          // bonuses needed in each of the dragon's 2 elements
-  dragonStealOnTie: false, // true: equal strength also steals (on your own turn)
+  dragonReq: 3,          // bonuses needed in each of the dragon's 2 elements
+  dragonStealOnTie: true, // equal strength also steals (on your own turn)
   prophecy: {},          // per-prophecy overrides, e.g. { 'p-fire': { min: 4, points: 3 } }
   lastSeatBonusToken: false,
-  startTokens: null,      // e.g. [0, 1, 1, 2] = crystals per turn-order position
+  startTokens: null,      // explicit override, e.g. [0, 1, 1, 2] = crystals per turn-order position
+  // turn-order compensation by player count (from balance simulation)
+  startTokensByPlayers: { 2: [0, 0], 3: [0, 1, 1], 4: [0, 1, 1, 1] },
 };
 
 module.exports = {

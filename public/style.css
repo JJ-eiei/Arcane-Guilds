@@ -1,6 +1,6 @@
 :root {
-  --felt: #1d2b2a;
-  --felt-2: #243634;
+  --felt: #1b1240;
+  --felt-2: #2a1a5e;
   --paper: #f6efe2;
   --paper-2: #ece2cf;
   --ink: #1f1a17;
@@ -27,9 +27,12 @@ body {
   font-family: var(--font-body);
   color: var(--ink);
   background:
-    radial-gradient(1200px 700px at 50% -10%, #2c4442 0%, transparent 60%),
-    radial-gradient(circle at 1px 1px, rgba(255,255,255,.035) 1px, transparent 0) 0 0 / 6px 6px,
+    radial-gradient(1100px 600px at 75% -10%, #5b3aa8 0%, transparent 60%),
+    radial-gradient(800px 500px at 0% 110%, #1f6f8b 0%, transparent 55%),
+    radial-gradient(1.5px 1.5px at 20px 30px, #fff9, transparent) 0 0 / 340px 200px,
+    radial-gradient(1px 1px at 220px 150px, #ffe9a8, transparent) 0 0 / 340px 200px,
     var(--felt);
+  background-attachment: fixed;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;           /* no double-tap zoom on iPad */
   -webkit-text-size-adjust: 100%;
@@ -148,6 +151,7 @@ input:focus, select:focus { outline: none; border-color: var(--ink); }
 }
 .icon-btn.small { width: 36px; height: 36px; font-size: 1rem; color: var(--ink); border-color: var(--line); background: transparent; }
 .badge { position: absolute; top: -4px; right: -4px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid var(--felt); }
+.screen.game .turn-banner { display: none; }
 .chips { flex: 1; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; justify-content: center; }
 .chip {
   display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 8px; border-radius: 99px;
@@ -177,7 +181,7 @@ input:focus, select:focus { outline: none; border-color: var(--ink); }
 #btn-chat { display: none; }
 
 /* tablets in portrait / phones: chat becomes a drawer */
-@media (max-width: 900px) {
+@media (max-width: 1400px) {
   #btn-chat { display: block; }
   .chat {
     position: fixed; z-index: 30; left: calc(10px + var(--safe-l)); right: calc(10px + var(--safe-r));
@@ -186,7 +190,7 @@ input:focus, select:focus { outline: none; border-color: var(--ink); }
   }
   .chat.open { transform: none; }
 }
-@media (min-width: 901px) { #btn-chat-close { display: none; } }
+@media (min-width: 1401px) { #btn-chat-close { display: none; } }
 
 .overlay {
   position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 20px;
@@ -204,3 +208,13 @@ input:focus, select:focus { outline: none; border-color: var(--ink); }
 .conn { position: fixed; z-index: 70; top: calc(8px + var(--safe-t)); left: 50%; transform: translateX(-50%); background: var(--gold); color: var(--ink); padding: 6px 14px; border-radius: 99px; font-weight: 500; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* ---------- Arcane Guilds theme for home / lobby ---------- */
+.logo-img { width: 72px; height: 72px; border-radius: 18px; box-shadow: 0 8px 24px rgba(0,0,0,.4); display: block; }
+.home-card, .lobby-card, .over-card {
+  background: linear-gradient(170deg, #fdf6ff, #efe3ff);
+  box-shadow: 0 0 0 2px rgba(255,255,255,.35), 0 24px 60px -20px rgba(0,0,0,.7), 0 0 60px rgba(155,93,229,.35);
+}
+.home-card::after, .lobby-card::after { border-color: #cdb6f2; }
+h1 em { color: #8a4fe0; }
+.btn.primary { background: linear-gradient(#b48cff, #7b4bd6); }

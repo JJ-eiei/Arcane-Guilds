@@ -80,7 +80,8 @@ function scoreOf(state, seat) {
 }
 
 function log(state, entry) {
-  state.log.push({ n: state.turnCount, ...entry });
+  state.logSeq = (state.logSeq || 0) + 1;
+  state.log.push({ id: state.logSeq, n: state.turnCount, ...entry });
   if (state.log.length > 60) state.log.shift();
 }
 
@@ -565,8 +566,16 @@ function view(state, seat) {
   };
 }
 
+// Static data the browser needs to draw cards (no secrets: deck order and
+// hidden information stay in `view`).
+const clientData = {
+  elements: ELEMENTS, star: STAR, elementInfo: D.ELEMENT_INFO,
+  cards: D.CARDS, guardians: D.GUARDIANS, dragons: D.DRAGONS, prophecies: D.PROPHECIES,
+};
+
 module.exports = {
   id: 'arcane',
+  clientData,
   name: 'Arcane Guilds',
   minPlayers: 2,
   maxPlayers: 4,

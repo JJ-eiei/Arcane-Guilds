@@ -9,8 +9,10 @@ const { ELEMENTS } = D;
 const P = (n) => Array.from({ length: n }, (_, i) => ({ id: `p${i}`, name: `P${i}` }));
 
 // A started game with prophecies picked, seat 0 to move.
+// Turn-order compensation is switched off here so token counts are exact;
+// it has its own test.
 function game(n = 2, seed = 1, config) {
-  const s = G.setup(P(n), { seed, skipProphecyPick: true, config });
+  const s = G.setup(P(n), { seed, skipProphecyPick: true, config: { startTokens: Array(n).fill(0), ...config } });
   s.firstSeat = 0; s.turn = 0;
   return s;
 }
@@ -36,7 +38,7 @@ const totalTokens = (s) => {
 test('§3 setup: supply by player count, market, guardians, dragon, prophecy options', () => {
   for (const [n, per] of [[2, 4], [3, 5], [4, 7]]) {
     const s = G.setup(P(n), { seed: n });
-    for (const e of ELEMENTS) assert.equal(s.supply[e], per);
+    for (const e of ELEMENTS) assert.equal(s.supply[e] + s.players.reduce((a, p) => a + p.tokens[e], 0), per);
     assert.equal(s.supply.star, 5);
     for (const lv of [1, 2, 3]) assert.equal(s.market[lv].filter(Boolean).length, 4);
     assert.equal(s.guardians.length, n + 1);
@@ -273,8 +275,8 @@ test('§5 owner buying own sealed card: seal crystal works as a wild; returns if
 });
 
 // ---------------------------------------------------------------- §6 dragon
-test('§6 dragon: first to qualify claims; strictly stronger steals; ties do not', () => {
-  const s = game(3);
+test('§6 dragon (stealOnTie off): first to qualify claims; strictly stronger steals; ties do not', () => {
+  const s = game(3, 1, { dragonStealOnTie: false });
   const dr = G.DRAGON[s.dragon.id];
   const [e1, e2] = Object.keys(dr.req);
   giveCards(s, 0, [...cardsOf(e1, 4), ...cardsOf(e2, 4)]);
@@ -291,7 +293,7 @@ test('§6 dragon: first to qualify claims; strictly stronger steals; ties do not
   assert.equal(G.publicPoints(s, 2) >= 4, true);
 
   // stronger in total but missing the requirement → no steal
-  const t = game(2);
+  const t = game(2, 1, { dragonReq: 4 });
   const d2 = G.DRAGON[t.dragon.id];
   const [a, b] = Object.keys(d2.req);
   giveCards(t, 0, [...cardsOf(a, 4), ...cardsOf(b, 4)]);
@@ -366,7 +368,9 @@ test('§7 every prophecy kind evaluates', () => {
   assert.equal(check('p-balance'), false);
   for (const e of ELEMENTS) giveCards(s, 0, cardsOf(e, 2));
   assert.equal(check('p-balance'), true);
-  assert.equal(check('p-trainee'), true); // 10 L1 cards
+  assert.equal(check('p-trainee'), false); // 10 L1 cards < 12
+  giveCards(s, 0, D.CARDS.filter((c) => c.level === 1 && c.bonus === 'light').slice(2, 4).map((c) => c.id));
+  assert.equal(check('p-trainee'), true);  // 12
   assert.equal(check('p-legend'), false);
   giveCards(s, 0, D.CARDS.filter((c) => c.level === 3).slice(0, 2).map((c) => c.id));
   assert.equal(check('p-legend'), true);
@@ -483,7 +487,7 @@ test('config: seal.takeWith lets a seal also take distinct crystals', () => {
   bad(s, 0, { type: 'seal', cardId: id, color: 'fire', colors: ['water', 'earth', 'wind'] }, /ไม่เกิน 2/);
   ok(s, 0, { type: 'seal', cardId: id, color: 'fire', colors: ['water', 'earth'] });
   assert.equal(s.players[0].tokens.water + s.players[0].tokens.earth, 2);
-  const t = game(4);
+  const t = game(4, 1, { seal: { maxPerPlayer: 2, curse: 1, ownerWild: true, takeWith: 0 } });
   give(t, 0, { fire: 1 });
   bad(t, 0, { type: 'seal', cardId: t.market[1][0], color: 'fire', colors: ['water'] }, /ไม่ได้ผลึกเพิ่ม/);
 });
@@ -497,4 +501,25 @@ test('config: dragonReq and prophecy overrides', () => {
   s.players[1].prophecy = 'p-fire';
   giveCards(s, 1, cardsOf('fire', 3));
   assert.equal(G.scoreOf(s, 1).prophecy, 2);
+});
+
+test('defaults: dragon equal strength steals on your own turn', () => {
+  const s = game(2);
+  assert.equal(s.config.dragonStealOnTie, true);
+  const [a, b] = Object.keys(G.DRAGON[s.dragon.id].req);
+  giveCards(s, 0, [...cardsOf(a, 3), ...cardsOf(b, 3)]);
+  ok(s, 0, { type: 'take', colors: ['fire', 'water', 'earth'] });
+  assert.equal(s.dragon.owner, 0);
+  giveCards(s, 1, [...cardsOf(a, 3), ...cardsOf(b, 3)]);
+  ok(s, 1, { type: 'take', colors: ['fire', 'water', 'earth'] });
+  assert.equal(s.dragon.owner, 1, 'tie steals');
+  ok(s, 0, { type: 'take', colors: ['wind', 'light', 'water'] });
+  assert.equal(s.dragon.owner, 0, 'a tie on your own turn steals it back');
+});
+
+test('defaults: turn-order compensation 2p none, 3p 0-1-1, 4p 0-1-1-1', () => {
+  for (const [n, exp] of [[2, [0, 0]], [3, [0, 1, 1]], [4, [0, 1, 1, 1]]]) {
+    const s = G.setup(P(n), { seed: 11 });
+    assert.deepEqual([...Array(n).keys()].map((k) => G.sumTokens(s.players[(s.firstSeat + k) % n].tokens)), exp);
+  }
 });
