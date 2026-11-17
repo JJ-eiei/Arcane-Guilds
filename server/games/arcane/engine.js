@@ -57,8 +57,9 @@ function publicPoints(state, seat) {
 
 function prophecyMet(state, seat) {
   const p = state.players[seat];
-  const pr = p.prophecy && PROPHECY[p.prophecy];
-  if (!pr) return false;
+  const base = p.prophecy && PROPHECY[p.prophecy];
+  if (!base) return false;
+  const pr = { ...base, ...((state.config.prophecy || {})[base.id] || {}) };
   const b = bonuses(state, seat);
   switch (pr.kind) {
     case 'elementBonus': return b[pr.element] >= pr.min;
@@ -73,7 +74,8 @@ function prophecyMet(state, seat) {
 
 function scoreOf(state, seat) {
   const pub = publicPoints(state, seat);
-  const proph = prophecyMet(state, seat) ? PROPHECY[state.players[seat].prophecy].points : 0;
+  const pid = state.players[seat].prophecy;
+  const proph = prophecyMet(state, seat) ? (((state.config.prophecy || {})[pid] || {}).points ?? PROPHECY[pid].points) : 0;
   return { public: pub, prophecy: proph, total: pub + proph };
 }
 
@@ -124,6 +126,7 @@ function applyCurse(state, cardId, curse) {
     state.players[curse.from].tokens[curse.color] -= curse.n;
     state.players[curse.to].tokens[curse.color] += curse.n;
     state.players[curse.to].cursesCollected += 1;
+    state.stats.curses++;
     log(state, { seat: curse.to, type: 'curse', from: curse.from, cardId, color: curse.color });
   }
   // the sealing crystal goes home to its owner
@@ -147,8 +150,9 @@ function planPayment(state, seat, cardId) {
   let useSeal = false;
   const seal = state.seals[cardId];
   if (seal && seal.seat === seat && state.config.seal.ownerWild && shortage > 0) {
+    // the seal crystal covers up to `ownerWildCount` missing crystals (default 1)
     useSeal = true;
-    shortage -= 1;
+    shortage -= Math.min(shortage, state.config.seal.ownerWildCount || 1);
   }
   if (shortage > p.tokens[STAR]) return null;
   pay[STAR] = shortage;
@@ -175,6 +179,7 @@ function setup(players, options = {}) {
     pendingGuardians: [],
     log: [],
     result: null,
+    stats: { takes: 0, reserves: 0, blindReserves: 0, buys: 0, seals: 0, curses: 0, dragonClaims: 0, dragonSteals: 0, discards: 0, guardians: 0 },
   };
 
   for (const e of ELEMENTS) state.supply[e] = config.tokensPerElement[n];
@@ -197,12 +202,17 @@ function setup(players, options = {}) {
   }
 
   state.firstSeat = Math.floor(rng(state) * n);
-  if (config.lastSeatBonusToken) {
-    // last player in turn order gets 1 element token of their choice — the
-    // engine gives the most plentiful one; UI may let them pick later
-    const last = (state.firstSeat + n - 1) % n;
-    state.players[last].tokens[ELEMENTS[0]] += 1;
-    state.supply[ELEMENTS[0]] -= 1;
+  // Turn-order compensation: startTokens[k] = number of different element
+  // crystals the k-th player in turn order starts with (k = 0 is first).
+  let comp = config.startTokens || (config.startTokensByPlayers && config.startTokensByPlayers[n]);
+  if (!comp && config.lastSeatBonusToken) comp = [...Array(n - 1).fill(0), 1];
+  if (comp) {
+    for (let k = 0; k < n; k++) {
+      const seat = (state.firstSeat + k) % n;
+      const count = Math.min(comp[k] || 0, ELEMENTS.length);
+      const pick = shuffle(state, [...ELEMENTS]).sort((x, y) => state.supply[y] - state.supply[x]).slice(0, count);
+      for (const e of pick) { state.players[seat].tokens[e]++; state.supply[e]--; }
+    }
   }
   if (options.skipProphecyPick) {
     for (const p of state.players) p.prophecy = p.prophecyOptions[0];
@@ -252,7 +262,7 @@ function move(state, seat, m) {
     case 'take': err = doTake(state, seat, m.colors); break;
     case 'reserve': err = doReserve(state, seat, m); break;
     case 'buy': err = doBuy(state, seat, m.cardId, m.curseColor); break;
-    case 'seal': err = doSeal(state, seat, m.cardId, m.color); break;
+    case 'seal': err = doSeal(state, seat, m.cardId, m.color, m.colors); break;
     case 'pass':
       if (legalMoves(state, seat).some((x) => x.type !== 'pass')) return 'ยังมีสิ่งที่ทำได้ ผ่านตาไม่ได้';
       log(state, { seat, type: 'pass' });
@@ -278,6 +288,7 @@ function doTake(state, seat, colors) {
     if (colors.some((c) => state.supply[c] < 1)) return 'ผลึกธาตุนั้นหมดแล้ว';
   }
   for (const c of colors) { state.supply[c]--; p.tokens[c]++; }
+  state.stats.takes++;
   log(state, { seat, type: 'take', colors });
 }
 
@@ -307,6 +318,8 @@ function doReserve(state, seat, m) {
   else state.decks[Number(m.deck)].pop();
   if (gotStar) { state.supply[STAR]--; p.tokens[STAR]++; }
   p.reserved.push({ id: cardId, hidden });
+  state.stats.reserves++;
+  if (hidden) state.stats.blindReserves++;
   if (where) applyCurse(state, cardId, plan.curse);
   log(state, { seat, type: 'reserve', cardId: hidden ? null : cardId, level: CARD[cardId].level, star: gotStar });
 }
@@ -339,12 +352,17 @@ function doBuy(state, seat, cardId, curseColor) {
     p.reserved.splice(rIdx, 1);
   }
   p.cards.push(cardId);
+  state.stats.buys++;
   log(state, { seat, type: 'buy', cardId, from: where ? 'market' : 'reserve' });
 }
 
-function doSeal(state, seat, cardId, color) {
+function doSeal(state, seat, cardId, color, extra) {
   const p = state.players[seat];
   const cfg = state.config.seal;
+  const takeWith = cfg.takeWith || 0;
+  extra = extra || [];
+  if (!Array.isArray(extra) || extra.length > takeWith) return takeWith ? `วางผนึกแล้วเก็บผลึกเพิ่มได้ไม่เกิน ${takeWith} เม็ด` : 'การวางผนึกไม่ได้ผลึกเพิ่ม';
+  if (new Set(extra).size !== extra.length || !extra.every((c) => ELEMENTS.includes(c) && state.supply[c] > 0)) return 'ผลึกที่เก็บเพิ่มต้องเป็นธาตุต่างกันและยังมีในกองกลาง';
   if (cfg.maxPerPlayer <= 0) return 'ปิดใช้ผนึกเวทในเกมนี้';
   if (!findMarket(state, cardId)) return 'ผนึกได้เฉพาะการ์ดที่เปิดอยู่ในตลาด';
   if (state.seals[cardId]) return 'การ์ดใบนี้มีผนึกอยู่แล้ว';
@@ -354,6 +372,8 @@ function doSeal(state, seat, cardId, color) {
   p.tokens[color]--;
   p.sealsActive++;
   state.seals[cardId] = { seat, color };
+  for (const c of extra) { state.supply[c]--; p.tokens[c]++; }
+  state.stats.seals++;
   log(state, { seat, type: 'seal', cardId, color });
 }
 
@@ -378,6 +398,7 @@ function doDiscard(state, seat, tokens) {
   }
   if (total !== over) return `ต้องคืนผลึก ${over} เม็ดพอดี`;
   for (const [t, n] of Object.entries(tokens)) { p.tokens[t] -= n; state.supply[t] += n; }
+  state.stats.discards++;
   log(state, { seat, type: 'discard', tokens });
   return checkGuardians(state, seat);
 }
@@ -397,6 +418,7 @@ function checkGuardians(state, seat) {
 function grantGuardian(state, seat, id) {
   state.guardians = state.guardians.filter((g) => g !== id);
   state.players[seat].guardians.push(id);
+  state.stats.guardians++;
   state.pendingGuardians = [];
   log(state, { seat, type: 'guardian', id });
 }
@@ -416,23 +438,31 @@ function afterGuardians(state, seat) {
   state.turnCount += 1;
 }
 
+function dragonReq(config, id) {
+  const n = config.dragonReq;
+  return Object.fromEntries(Object.keys(DRAGON[id].req).map((e) => [e, n]));
+}
+
 function checkDragon(state, seat) {
-  const dragon = DRAGON[state.dragon.id];
+  const req = dragonReq(state.config, state.dragon.id);
   const b = bonuses(state, seat);
-  if (!meets(b, dragon.req)) return;
+  if (!meets(b, req)) return;
   const owner = state.dragon.owner;
   if (owner === seat) return;
   if (owner === null) {
     state.dragon.owner = seat;
+    state.stats.dragonClaims++;
     log(state, { seat, type: 'dragon', from: null });
     return;
   }
   const strength = (s) => {
     const bb = bonuses(state, s);
-    return Object.keys(dragon.req).reduce((a, e) => a + bb[e], 0);
+    return Object.keys(req).reduce((a, e) => a + bb[e], 0);
   };
-  if (strength(seat) > strength(owner)) {
+  const mine = strength(seat), theirs = strength(owner);
+  if (mine > theirs || (mine === theirs && state.config.dragonStealOnTie)) {
     state.dragon.owner = seat;
+    state.stats.dragonSteals++;
     log(state, { seat, type: 'dragon', from: owner });
   }
 }
@@ -546,6 +576,6 @@ module.exports = {
   currentTurn: (state) => (state.phase === 'over' || state.phase === 'prophecy' ? null : state.turn),
   isOver: (state) => state.phase === 'over',
   // extras for bots / simulation / tests
-  legalMoves, scoreOf, publicPoints, bonuses, planPayment, sumTokens,
+  legalMoves, scoreOf, dragonReq, publicPoints, bonuses, planPayment, sumTokens,
   CARD, GUARDIAN, DRAGON, PROPHECY, TOKEN_TYPES,
 };

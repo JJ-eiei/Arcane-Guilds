@@ -1,0 +1,59 @@
+{
+  "dragon": {
+    "req3 pts4": {
+      "variantWinPct": 54.3,
+      "ci": 2.2,
+      "seals": 3.5,
+      "curses": 1.49,
+      "dragonClaimedPct": 92.4,
+      "steals": 0.13,
+      "allHuntersSteals": 0.14
+    },
+    "req3 pts4 tieSteal": {
+      "variantWinPct": 53.4,
+      "ci": 2.2,
+      "seals": 3.49,
+      "curses": 1.51,
+      "dragonClaimedPct": 92.8,
+      "steals": 1.08,
+      "allHuntersSteals": 1.06
+    },
+    "req3 pts3 tieSteal": {
+      "variantWinPct": 49.7,
+      "ci": 2.2,
+      "seals": 3.27,
+      "curses": 1.42,
+      "dragonClaimedPct": 93.3,
+      "steals": 1.25,
+      "allHuntersSteals": 1.17
+    }
+  },
+  "prophecy": {
+    "balance3 trainee11": {
+      "p-balance": 13.9,
+      "p-dragon": 41.5,
+      "p-earth": 30.6,
+      "p-fire": 32.7,
+      "p-legend": 32.8,
+      "p-light": 28.2,
+      "p-sealer": 75.1,
+      "p-spirits": 33.3,
+      "p-trainee": 64.1,
+      "p-water": 31.8,
+      "p-wind": 29.8
+    },
+    "balance3 trainee12": {
+      "p-balance": 15.1,
+      "p-dragon": 41.6,
+      "p-earth": 29,
+      "p-fire": 31.9,
+      "p-legend": 36.1,
+      "p-light": 31.9,
+      "p-sealer": 74.2,
+      "p-spirits": 35.1,
+      "p-trainee": 44.3,
+      "p-water": 29.9,
+      "p-wind": 32
+    }
+  }
+}

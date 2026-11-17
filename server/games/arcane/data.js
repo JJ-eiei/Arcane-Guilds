@@ -152,9 +152,13 @@ const CONFIG = {
   takeTwoMin: 4,
   starTokens: 5,
   tokensPerElement: { 2: 4, 3: 5, 4: 7 },
-  seal: { maxPerPlayer: 2, curse: 1, ownerWild: true },
+  seal: { maxPerPlayer: 2, curse: 1, ownerWild: true, ownerWildCount: 1, takeWith: 0 },
   dragonPoints: 4,
+  dragonReq: 4,          // bonuses needed in each of the dragon's 2 elements
+  dragonStealOnTie: false, // true: equal strength also steals (on your own turn)
+  prophecy: {},          // per-prophecy overrides, e.g. { 'p-fire': { min: 4, points: 3 } }
   lastSeatBonusToken: false,
+  startTokens: null,      // e.g. [0, 1, 1, 2] = crystals per turn-order position
 };
 
 module.exports = {

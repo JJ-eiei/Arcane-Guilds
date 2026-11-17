@@ -1,0 +1,317 @@
+{
+  "generatedAt": "2026-11-17T08:09:15.579Z",
+  "scale": 1,
+  "seat": {
+    "2": {
+      "seats": [
+        {
+          "winPct": 57.3,
+          "ci": 1.8
+        },
+        {
+          "winPct": 42.7,
+          "ci": 1.8
+        }
+      ],
+      "rounds": 24.3,
+      "winnerScore": 17.4,
+      "seals": 0.01,
+      "curses": 0,
+      "reserves": 2.06,
+      "dragonClaimedPct": 28.8,
+      "dragonStealsPerGame": 0,
+      "dragonOwnerWinsPct": 77.4,
+      "guardiansPerGame": 2.82,
+      "prophecySwingPct": 5.9,
+      "capped": 0
+    },
+    "3": {
+      "seats": [
+        {
+          "winPct": 44.7,
+          "ci": 1.8
+        },
+        {
+          "winPct": 31.3,
+          "ci": 1.7
+        },
+        {
+          "winPct": 24.1,
+          "ci": 1.5
+        }
+      ],
+      "rounds": 23.6,
+      "winnerScore": 17.3,
+      "seals": 0.01,
+      "curses": 0,
+      "reserves": 3.17,
+      "dragonClaimedPct": 27,
+      "dragonStealsPerGame": 0,
+      "dragonOwnerWinsPct": 67.4,
+      "guardiansPerGame": 3.87,
+      "prophecySwingPct": 9.3,
+      "capped": 0
+    },
+    "4": {
+      "seats": [
+        {
+          "winPct": 37.6,
+          "ci": 1.7
+        },
+        {
+          "winPct": 25.6,
+          "ci": 1.6
+        },
+        {
+          "winPct": 21.5,
+          "ci": 1.5
+        },
+        {
+          "winPct": 15.4,
+          "ci": 1.3
+        }
+      ],
+      "rounds": 22.9,
+      "winnerScore": 17.2,
+      "seals": 0.01,
+      "curses": 0,
+      "reserves": 3.47,
+      "dragonClaimedPct": 7.9,
+      "dragonStealsPerGame": 0,
+      "dragonOwnerWinsPct": 71.4,
+      "guardiansPerGame": 4.39,
+      "prophecySwingPct": 10.6,
+      "capped": 0
+    }
+  },
+  "seatFix": {
+    "2": {
+      "seats": [
+        {
+          "winPct": 51,
+          "ci": 1.8
+        },
+        {
+          "winPct": 49,
+          "ci": 1.8
+        }
+      ],
+      "rounds": 24.2,
+      "winnerScore": 17.3,
+      "seals": 0.01,
+      "curses": 0,
+      "reserves": 2.03,
+      "dragonClaimedPct": 28.8,
+      "dragonStealsPerGame": 0.01,
+      "dragonOwnerWinsPct": 76.5,
+      "guardiansPerGame": 2.82,
+      "prophecySwingPct": 6.6,
+      "capped": 0
+    },
+    "3": {
+      "seats": [
+        {
+          "winPct": 38.8,
+          "ci": 1.7
+        },
+        {
+          "winPct": 28.8,
+          "ci": 1.6
+        },
+        {
+          "winPct": 32.4,
+          "ci": 1.7
+        }
+      ],
+      "rounds": 23.5,
+      "winnerScore": 17.2,
+      "seals": 0.01,
+      "curses": 0,
+      "reserves": 3.12,
+      "dragonClaimedPct": 26.8,
+      "dragonStealsPerGame": 0,
+      "dragonOwnerWinsPct": 69.1,
+      "guardiansPerGame": 3.89,
+      "prophecySwingPct": 8.9,
+      "capped": 0
+    },
+    "4": {
+      "seats": [
+        {
+          "winPct": 33.2,
+          "ci": 1.7
+        },
+        {
+          "winPct": 24.2,
+          "ci": 1.5
+        },
+        {
+          "winPct": 18.5,
+          "ci": 1.4
+        },
+        {
+          "winPct": 24.1,
+          "ci": 1.5
+        }
+      ],
+      "rounds": 22.9,
+      "winnerScore": 17.3,
+      "seals": 0.01,
+      "curses": 0,
+      "reserves": 3.36,
+      "dragonClaimedPct": 7.3,
+      "dragonStealsPerGame": 0,
+      "dragonOwnerWinsPct": 68.9,
+      "guardiansPerGame": 4.41,
+      "prophecySwingPct": 11.8,
+      "capped": 0
+    }
+  },
+  "styles": {
+    "strong": 58,
+    "balanced": 26.3,
+    "points": 9.7,
+    "engine": 31.5,
+    "sealer": 1.2,
+    "dragon": 23.4
+  },
+  "seal": {
+    "curse1 (ปัจจุบัน)": {
+      "variantWinPct": 3.8,
+      "ci": 0.8,
+      "rounds": 24.1,
+      "winnerScore": 17.3,
+      "seals": 15.49,
+      "curses": 8.06,
+      "reserves": 1.87,
+      "dragonClaimedPct": 7.3,
+      "dragonStealsPerGame": 0,
+      "dragonOwnerWinsPct": 81.4,
+      "guardiansPerGame": 4.27,
+      "prophecySwingPct": 5.7,
+      "capped": 0
+    },
+    "curse2": {
+      "variantWinPct": 7.8,
+      "ci": 1.2,
+      "rounds": 24.9,
+      "winnerScore": 17.2,
+      "seals": 14.18,
+      "curses": 4.33,
+      "reserves": 2.39,
+      "dragonClaimedPct": 6.3,
+      "dragonStealsPerGame": 0,
+      "dragonOwnerWinsPct": 77.8,
+      "guardiansPerGame": 4.2,
+      "prophecySwingPct": 6.3,
+      "capped": 0
+    },
+    "curse1, seal ใช้แทน 2 เม็ด": {
+      "variantWinPct": 9.8,
+      "ci": 1.3,
+      "rounds": 24,
+      "winnerScore": 17.3,
+      "seals": 13.87,
+      "curses": 4.73,
+      "reserves": 1.42,
+      "dragonClaimedPct": 7.5,
+      "dragonStealsPerGame": 0,
+      "dragonOwnerWinsPct": 79.2,
+      "guardiansPerGame": 4.3,
+      "prophecySwingPct": 6.6,
+      "capped": 0
+    },
+    "curse2, max3": {
+      "variantWinPct": 8.4,
+      "ci": 1.2,
+      "rounds": 25.1,
+      "winnerScore": 17.3,
+      "seals": 14.98,
+      "curses": 4.77,
+      "reserves": 2.45,
+      "dragonClaimedPct": 7.5,
+      "dragonStealsPerGame": 0,
+      "dragonOwnerWinsPct": 75.2,
+      "guardiansPerGame": 4.2,
+      "prophecySwingPct": 7,
+      "capped": 0
+    }
+  },
+  "dragon": {
+    "req4 pts4 (ปัจจุบัน)": {
+      "variantWinPct": 49.9,
+      "ci": 2.2,
+      "rounds": 23,
+      "winnerScore": 17.2,
+      "seals": 0.01,
+      "curses": 0,
+      "reserves": 3.28,
+      "dragonClaimedPct": 10.3,
+      "dragonStealsPerGame": 0,
+      "dragonOwnerWinsPct": 67,
+      "guardiansPerGame": 4.35,
+      "prophecySwingPct": 11,
+      "capped": 0
+    },
+    "req3 pts4": {
+      "variantWinPct": 55.4,
+      "ci": 2.2,
+      "rounds": 22.1,
+      "winnerScore": 17.4,
+      "seals": 0.01,
+      "curses": 0,
+      "reserves": 3.13,
+      "dragonClaimedPct": 92.6,
+      "dragonStealsPerGame": 0.13,
+      "dragonOwnerWinsPct": 65.2,
+      "guardiansPerGame": 4.06,
+      "prophecySwingPct": 9.2,
+      "capped": 0
+    },
+    "req3 pts3": {
+      "variantWinPct": 52.8,
+      "ci": 2.2,
+      "rounds": 22.5,
+      "winnerScore": 17.4,
+      "seals": 0.01,
+      "curses": 0,
+      "reserves": 3.06,
+      "dragonClaimedPct": 93.4,
+      "dragonStealsPerGame": 0.16,
+      "dragonOwnerWinsPct": 59.3,
+      "guardiansPerGame": 4.16,
+      "prophecySwingPct": 10.3,
+      "capped": 0
+    },
+    "req3 pts5": {
+      "variantWinPct": 57.3,
+      "ci": 2.2,
+      "rounds": 21.9,
+      "winnerScore": 17.5,
+      "seals": 0.01,
+      "curses": 0,
+      "reserves": 3.16,
+      "dragonClaimedPct": 92.9,
+      "dragonStealsPerGame": 0.11,
+      "dragonOwnerWinsPct": 72.2,
+      "guardiansPerGame": 3.9,
+      "prophecySwingPct": 8.1,
+      "capped": 0
+    }
+  },
+  "prophecy": {
+    "p-legend": 7.4,
+    "p-dragon": 10.5,
+    "p-fire": 11.5,
+    "p-water": 11.4,
+    "p-wind": 8.9,
+    "p-balance": 85.1,
+    "p-light": 10.7,
+    "p-earth": 7.7,
+    "p-sealer": 0,
+    "p-trainee": 99.6,
+    "p-spirits": 36.3
+  },
+  "prophecySwingPct": 8.6,
+  "seconds": 468
+}

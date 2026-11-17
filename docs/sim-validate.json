@@ -1,0 +1,130 @@
+{
+  "config": {
+    "startTokensByPlayers": {
+      "2": [
+        0,
+        0
+      ],
+      "3": [
+        0,
+        1,
+        1
+      ],
+      "4": [
+        0,
+        1,
+        1,
+        1
+      ]
+    },
+    "dragonReq": 3,
+    "dragonPoints": 4,
+    "dragonStealOnTie": true,
+    "seal": {
+      "maxPerPlayer": 2,
+      "curse": 1,
+      "ownerWild": true,
+      "ownerWildCount": 2,
+      "takeWith": 2
+    },
+    "prophecy": {
+      "p-fire": {
+        "min": 4
+      },
+      "p-water": {
+        "min": 4
+      },
+      "p-earth": {
+        "min": 4
+      },
+      "p-wind": {
+        "min": 4
+      },
+      "p-light": {
+        "min": 4
+      },
+      "p-balance": {
+        "min": 2,
+        "points": 2
+      },
+      "p-trainee": {
+        "min": 12
+      },
+      "p-legend": {
+        "min": 1,
+        "points": 2
+      },
+      "p-sealer": {
+        "min": 3
+      }
+    }
+  },
+  "byPlayers": {
+    "2": {
+      "seats": [
+        52.8,
+        47.2
+      ],
+      "rounds": 23.1,
+      "winnerScore": 17.4,
+      "dragonClaimedPct": 88.6,
+      "steals": 0.63,
+      "seals": 1.2,
+      "curses": 0.17,
+      "guardians": 2.62,
+      "prophecySwingPct": 5.7
+    },
+    "3": {
+      "seats": [
+        29.8,
+        35.4,
+        34.8
+      ],
+      "rounds": 22.1,
+      "winnerScore": 17.2,
+      "dragonClaimedPct": 94.2,
+      "steals": 1.3,
+      "seals": 2.05,
+      "curses": 0.53,
+      "guardians": 3.63,
+      "prophecySwingPct": 8.1
+    },
+    "4": {
+      "seats": [
+        23.2,
+        28,
+        24.2,
+        24.5
+      ],
+      "rounds": 21.9,
+      "winnerScore": 17.5,
+      "dragonClaimedPct": 91.4,
+      "steals": 0.9,
+      "seals": 3.14,
+      "curses": 1.13,
+      "guardians": 4,
+      "prophecySwingPct": 9.8
+    }
+  },
+  "prophecy": {
+    "p-balance": 76.6,
+    "p-dragon": 42.3,
+    "p-earth": 28.2,
+    "p-fire": 29.2,
+    "p-legend": 33.3,
+    "p-light": 29.8,
+    "p-sealer": 37.2,
+    "p-spirits": 33.6,
+    "p-trainee": 43.8,
+    "p-water": 28,
+    "p-wind": 29.6
+  },
+  "ab": {
+    "ผนึกหนัก": 49.3,
+    "ล่ามังกร": 54,
+    "เน้นแต้ม": 31.9,
+    "เน้นภูต": 53.7,
+    "ไม่ใช้ผนึกเลย": 49.3
+  },
+  "seconds": 249
+}

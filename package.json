@@ -7,7 +7,10 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "cards": "node scripts/card-report.js",
+    "sim": "node scripts/sim/validate.js",
+    "sim:quick": "node scripts/sim/validate.js 0.1"
   },
   "engines": {
     "node": ">=18"

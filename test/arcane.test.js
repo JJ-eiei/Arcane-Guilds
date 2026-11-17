@@ -464,3 +464,37 @@ test('fuzz: 300 random games (2–4p) — invariants hold and games end', () => 
   }
   assert.equal(ended, 300);
 });
+
+// ---------------------------------------------------------------- tunable options
+test('config: startTokens compensates later seats with distinct crystals', () => {
+  const s = G.setup(P(4), { seed: 5, skipProphecyPick: true, config: { startTokens: [0, 1, 1, 2] } });
+  const byPos = [0, 1, 2, 3].map((k) => s.players[(s.firstSeat + k) % 4].tokens);
+  assert.deepEqual(byPos.map((t) => G.sumTokens(t)), [0, 1, 1, 2]);
+  assert.ok(Object.values(byPos[3]).every((v) => v <= 1), 'distinct elements');
+  assert.equal(byPos[3].star, 0);
+  assert.deepEqual(totalTokens(s), totalTokens(G.setup(P(4), { seed: 5, skipProphecyPick: true })));
+});
+
+test('config: seal.takeWith lets a seal also take distinct crystals', () => {
+  const s = game(4, 1, { seal: { maxPerPlayer: 2, curse: 1, ownerWild: true, takeWith: 2 } });
+  give(s, 0, { fire: 1 });
+  const id = s.market[1][0];
+  bad(s, 0, { type: 'seal', cardId: id, color: 'fire', colors: ['water', 'water'] }, /ต่างกัน/);
+  bad(s, 0, { type: 'seal', cardId: id, color: 'fire', colors: ['water', 'earth', 'wind'] }, /ไม่เกิน 2/);
+  ok(s, 0, { type: 'seal', cardId: id, color: 'fire', colors: ['water', 'earth'] });
+  assert.equal(s.players[0].tokens.water + s.players[0].tokens.earth, 2);
+  const t = game(4);
+  give(t, 0, { fire: 1 });
+  bad(t, 0, { type: 'seal', cardId: t.market[1][0], color: 'fire', colors: ['water'] }, /ไม่ได้ผลึกเพิ่ม/);
+});
+
+test('config: dragonReq and prophecy overrides', () => {
+  const s = game(2, 1, { dragonReq: 3, prophecy: { 'p-fire': { min: 3, points: 2 } } });
+  const [a, b] = Object.keys(G.DRAGON[s.dragon.id].req);
+  giveCards(s, 0, [...cardsOf(a, 3), ...cardsOf(b, 3)]);
+  ok(s, 0, { type: 'take', colors: ['fire', 'water', 'earth'] });
+  assert.equal(s.dragon.owner, 0);
+  s.players[1].prophecy = 'p-fire';
+  giveCards(s, 1, cardsOf('fire', 3));
+  assert.equal(G.scoreOf(s, 1).prophecy, 2);
+});
